@@ -1,11 +1,11 @@
-﻿# --- VERSÃO 1.0.0 (RELEASE OFICIAL - SISTEMA COMPLETO) ---
-Write-Host "--- VERSÃO 1.0.0 CARREGADA ---" -ForegroundColor Cyan
+﻿# --- VERSÃO 1.0.1 (RELEASE OFICIAL - SISTEMA COMPLETO) ---
+Write-Host "--- VERSÃO 1.0.1 CARREGADA ---" -ForegroundColor Cyan
 
 # ==========================================================================
 # CONFIGURAÇÃO CENTRAL
 # ==========================================================================
 # COLE AQUI A SUA URL DA IMPLANTAÇÃO (EXEC):
-$API_URL = "https://script.google.com/macros/s/AKfycbw-3wIuqsF0BLWBWCnULXk9JN9kIVQn2FXGRdzb9mjA7Xy3bsCJNHt6iy_pIcaWazVF/exec"
+$API_URL = "https://script.google.com/a/macros/luizalabs.com/s/AKfycbyramIj-2zInesvtZbkUFA5BiEp-__bdGsa7yOv_G5xys8EZqG-c2zvkxi4JpjsZkjb/exec"
 
 # --- PRÉ-REQUISITOS DE SEGURANÇA ---
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -23,6 +23,71 @@ else {
 # Carrega bibliotecas visuais
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+
+# ==========================================================================
+# FUNÇÕES UTILITÁRIAS (LOGS E RETRY) - DEFINIDAS NO INÍCIO
+# ==========================================================================
+# --- CONFIGURAÇÃO DE LOGS ---
+$logDir = "C:\ProgramData\ADResetTool\Logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Force -Path $logDir | Out-Null }
+$logFile = Join-Path $logDir "Log_$(Get-Date -Format 'yyyy-MM-dd').txt"
+
+function global:Write-Console($msg) {
+    $timestamp = Get-Date -Format 'HH:mm:ss'
+    $logMsg = "[$timestamp] $msg"
+    
+    # Escreve no Arquivo
+    try {
+        Add-Content -Path $logFile -Value $logMsg -ErrorAction SilentlyContinue
+    }
+    catch {}
+
+    # Escreve na GUI (se existir)
+    if ($global:txtConsole -and !$global:txtConsole.IsDisposed) {
+        $global:txtConsole.AppendText("$logMsg`r`n")
+        $global:txtConsole.SelectionStart = $global:txtConsole.Text.Length
+        $global:txtConsole.ScrollToCaret()
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+}
+
+Write-Host "Carregando funções utilitárias..." -ForegroundColor Gray
+
+function global:Invoke-Retry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ScriptBlock]$ScriptBlock,
+        [int]$MaxRetries = 2,
+        [int]$DelaySeconds = 2,
+        [string]$ErrorMessage = "Operação falhou"
+    )
+    
+    $retryCount = 0
+    $completed = $false
+    $lastError = $null
+    
+    while (-not $completed) {
+        try {
+            # Executa o bloco de código
+            $result = & $ScriptBlock
+            $completed = $true
+            return $result
+        }
+        catch {
+            $lastError = $_
+            $retryCount++
+            
+            if ($retryCount -ge $MaxRetries) {
+                Write-Console " > ERRO FATAL: $ErrorMessage após $retryCount tentativas. Detalhe: $($lastError.Exception.Message)"
+                throw $lastError
+            }
+            else {
+                Write-Console " > AVISO: Tentativa $retryCount de $MaxRetries falhou. Retentando em $DelaySeconds segundos..."
+                Start-Sleep -Seconds $DelaySeconds
+            }
+        }
+    }
+}
 
 # --- CONFIGURAÇÃO DA INTERFACE (GUI) ---
 $mainForm = New-Object System.Windows.Forms.Form
@@ -71,8 +136,10 @@ try {
     # URL com o novo parâmetro mode=get_analysts
     $urlAnalistas = $API_URL + "?mode=get_analysts"
     
-    # Chama API
-    $analistasRemotos = Invoke-RestMethod -Uri $urlAnalistas -Method Get -ErrorAction Stop
+    # Chama API com Retry
+    $analistasRemotos = Invoke-Retry -ScriptBlock { 
+        Invoke-RestMethod -Uri $urlAnalistas -Method Get -ErrorAction Stop 
+    } -ErrorMessage "Falha ao buscar analistas"
 
     if ($analistasRemotos -is [System.Array] -and $analistasRemotos.Count -gt 0) {
         # Adiciona a opção TODOS no início da lista
@@ -230,12 +297,9 @@ $txtConsole.Font = New-Object System.Drawing.Font("Consolas", 9)
 $txtConsole.Dock = "Fill"
 $grpConsole.Controls.Add($txtConsole)
 
-function Write-Console($msg) {
-    $txtConsole.AppendText("[$(Get-Date -Format 'HH:mm:ss')] $msg`r`n")
-    $txtConsole.SelectionStart = $txtConsole.Text.Length
-    $txtConsole.ScrollToCaret()
-    [System.Windows.Forms.Application]::DoEvents()
-}
+$txtConsole.Dock = "Fill"
+$grpConsole.Controls.Add($txtConsole)
+$global:txtConsole = $txtConsole # Expose to function
 
 # ==========================================================================
 # FUNÇÃO DE ENVIO DE EMAIL VIA SMTP
@@ -348,7 +412,12 @@ function Send-ResetEmail {
         
         $smtp = New-Object System.Net.Mail.SmtpClient($smtpServer, $smtpPort)
         $smtp.EnableSsl = $false
-        $smtp.Send($msg)
+        $smtp.Timeout = 2000 # 2 segundos de timeout
+        
+        # Envia com Retry
+        Invoke-Retry -ScriptBlock { 
+            $smtp.Send($msg) 
+        } -ErrorMessage "Falha no envio SMTP"
         
         Write-Console " > Email enviado para: $Para"
         return $true
@@ -522,7 +591,12 @@ function Send-TuriaRequestEmail {
         
         $smtp = New-Object System.Net.Mail.SmtpClient($smtpServer, $smtpPort)
         $smtp.EnableSsl = $false
-        $smtp.Send($msg)
+        $smtp.Timeout = 2000 # 2 segundos de timeout
+        
+        # Envia com Retry
+        Invoke-Retry -ScriptBlock { 
+            $smtp.Send($msg) 
+        } -ErrorMessage "Falha no envio SMTP (Turia)"
         
         Write-Console " > Email de solicitacao Turia enviado para: $Para"
         return $true
@@ -579,7 +653,10 @@ function CarregarDados($urlSufix) {
     Write-Console "Iniciando consulta à API..."
 
     try {
-        $apiData = Invoke-RestMethod -Uri $urlFinal -Method Get
+        $apiData = Invoke-Retry -ScriptBlock { 
+            Invoke-RestMethod -Uri $urlFinal -Method Get 
+        } -ErrorMessage "Falha ao consultar API de Demandas"
+        
         Write-Console "Resposta recebida com sucesso."
         
         $lista = @($apiData)
@@ -804,7 +881,9 @@ $btnReset.Add_Click({
                 } | ConvertTo-Json
             
                 try { 
-                    Invoke-RestMethod -Uri $urlBase -Method Post -Body $p -ContentType "application/json" 
+                    Invoke-Retry -ScriptBlock {
+                        Invoke-RestMethod -Uri $urlBase -Method Post -Body $p -ContentType "application/json" 
+                    } -ErrorMessage "Falha ao enviar log API"
                     Write-Console " > Log enviado para API."
                 }
                 catch { 
@@ -829,8 +908,12 @@ $btnReset.Add_Click({
                         if ($emailTuriaEnviado) {
                             # SUCESSO - Email enviado, marcar como concluído
                             $row.Cells["Status"].Value = "SUCESSO"
-                            $destTipo = if ($emailColab) { "Colaborador" } else { "Gestores" }
-                            $row.Cells["Lideranca"].Value = "Email Turia ($destTipo) [OK]"
+                            $destTipo = if ($emailColab) { "Colab" } else { "Gestor" }
+                            
+                            # EXIBE O EMAIL DO DESTINATÁRIO NO GRID
+                            $row.Cells["Lideranca"].Value = "Enviado: $destinatarioEmail"
+                            $row.Cells["Lideranca"].ToolTipText = "Tipo: $destTipo | CC: $ccEmail"
+                            
                             $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Blue
                             $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGreen
                             
@@ -848,7 +931,9 @@ $btnReset.Add_Click({
                                 executor          = $executor
                             } | ConvertTo-Json
                             try { 
-                                Invoke-RestMethod -Uri $urlBase -Method Post -Body $pTuria -ContentType "application/json"
+                                Invoke-Retry -ScriptBlock {
+                                    Invoke-RestMethod -Uri $urlBase -Method Post -Body $pTuria -ContentType "application/json"
+                                } -ErrorMessage "Falha ao atualizar fila (Turia)"
                                 Write-Console " > Solicitacao removida da fila."
                             }
                             catch { Write-Console " > Erro ao atualizar fila: $_" }

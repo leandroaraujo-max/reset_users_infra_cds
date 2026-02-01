@@ -82,6 +82,18 @@
                         </div>
                     </div>
 
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <input id="remember-me" name="remember-me" type="checkbox" v-model="rememberMe"
+                                class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <label for="remember-me" class="ml-2 block text-sm text-gray-900">Lembrar-me</label>
+                        </div>
+                        <div class="text-sm">
+                            <a href="#" @click.prevent="currentView = 'forgot_password'"
+                                class="font-medium text-blue-600 hover:text-blue-500">Esqueci minha senha</a>
+                        </div>
+                    </div>
+
                     <div>
                         <button type="submit" :disabled="isLoading"
                             class="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50">
@@ -95,10 +107,10 @@
                         <a href="#" @click.prevent="currentView = 'register'"
                             class="font-medium text-blue-600 hover:text-blue-500">Solicitar Acesso</a>
                     </p>
-                    <p class="text-sm text-gray-600">
-                        <a href="#" @click.prevent="currentView = 'forgot_password'"
-                            class="font-medium text-blue-600 hover:text-blue-500">Esqueci minha senha</a>
-                    </p>
+                </div>
+                <!-- Versão no canto inferior direito -->
+                <div class="fixed bottom-2 right-4 text-xs text-gray-400">
+                    v1.0.1
                 </div>
             </div>
         </div>
@@ -233,7 +245,7 @@
 
                             <span class="font-bold text-xl tracking-tight leading-none">
                                 Reset de Usuários
-                                <span class="ml-2 text-xs bg-blue-600 px-2 py-0.5 rounded">v1.0.0</span>
+                                <span class="ml-2 text-xs bg-blue-600 px-2 py-0.5 rounded">v1.0.1</span>
                                 <br>
                                 <span class="text-xs font-normal text-blue-200">Suporte Infra CDs</span>
                             </span>
@@ -301,7 +313,7 @@
                                             </svg>
                                         </div>
                                         <input type="text" v-model="searchQuery" @keyup.enter="performSearch"
-                                            placeholder="Nome, Usuário de Rede ou Email..."
+                                            placeholder="Nome, ID, Usuário de Rede ou Email..."
                                             class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg p-2.5 border bg-white"
                                             :disabled="!selectedFilial">
                                         <div class="absolute inset-y-0 right-0 pr-2 flex items-center">
@@ -675,12 +687,25 @@
                 const sortColumn = ref('data');
                 const sortDirection = ref('desc');
 
+                const rememberMe = ref(false);
+
                 // --- AUTH METHODS ---
                 const handleLogin = () => {
                     isLoading.value = true;
                     google.script.run.withSuccessHandler(res => {
                         isLoading.value = false;
                         if (res.success) {
+                            // Salva ou Limpa credenciais
+                            if (rememberMe.value) {
+                                localStorage.setItem('savedEmail', authForm.value.email);
+                                localStorage.setItem('savedPassword', authForm.value.password); // Nota: Em produção real, evitar salvar senhas em plain text
+                                localStorage.setItem('rememberMe', 'true');
+                            } else {
+                                localStorage.removeItem('savedEmail');
+                                localStorage.removeItem('savedPassword');
+                                localStorage.removeItem('rememberMe');
+                            }
+
                             userEmail.value = res.token;
                             userInitials.value = res.name.substring(0, 2).toUpperCase();
                             if (res.firstAccess) {
@@ -695,6 +720,15 @@
                     }).login(authForm.value.email, authForm.value.password);
                 };
 
+                // Auto-load credentials
+                onMounted(() => {
+                    if (localStorage.getItem('rememberMe') === 'true') {
+                        authForm.value.email = localStorage.getItem('savedEmail') || '';
+                        authForm.value.password = localStorage.getItem('savedPassword') || '';
+                        rememberMe.value = true;
+                    }
+                });
+
                 // Esqueci Senha
                 const handleForgotPassword = () => {
                     if (!authForm.value.email) {
@@ -703,13 +737,14 @@
                     }
                     isLoading.value = true;
 
+                    // Integração REAL com o backend
                     google.script.run.withSuccessHandler(res => {
                         isLoading.value = false;
-                        alert(res.message + '\n\nVerifique sua caixa de entrada.\n\nVocê deverá trocar a senha no próximo login.');
+                        alert(res.message);
                         currentView.value = 'login';
                     }).withFailureHandler(err => {
                         isLoading.value = false;
-                        alert(err.message);
+                        alert("Erro: " + err.message);
                     }).requestPasswordReset(authForm.value.email);
                 };
 
@@ -968,7 +1003,7 @@
 
                 return {
                     appLogo, // Expõe a logo para o template
-                    currentView, authForm, isLoading, userEmail, userInitials,
+                    currentView, authForm, isLoading, userEmail, userInitials, rememberMe,
                     handleLogin, handleRegister, handleChangePassword, handleForgotPassword, logout, initiateChangePassword, fetchUserData,
                     currentTab, filiais, analystList, selectedFilial, selectedAnalyst, searchQuery,
                     searchResults, loading, submitting, isConfirmModalVisible, isSuccessModalVisible,

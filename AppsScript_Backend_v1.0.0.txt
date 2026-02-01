@@ -1,4 +1,4 @@
-// --- VERSÃO API: 1.0.0 (Release Oficial - Sistema Completo) ---
+// --- VERSÃO API: 1.0.1 (Release Oficial - Sistema Completo) ---
 const PROJECT_ID_API = 'maga-bigdata';
 
 // ÚNICA PLANILHA DE GESTÃO
@@ -492,7 +492,11 @@ function searchUsersWeb(term, filial) {
         WHERE 
             CAST(t2.FILIAL AS STRING) = '${sanFilial}'
             AND t2.SITUACAO = 'Em Atividade Normal'
-            AND (UPPER(t1.user_name) LIKE '%${sanTerm}%' OR UPPER(t2.NOME) LIKE '%${sanTerm}%')
+            AND (
+                UPPER(t1.user_name) LIKE '%${sanTerm}%' 
+                OR UPPER(t2.NOME) LIKE '%${sanTerm}%'
+                OR CAST(t2.ID AS STRING) LIKE '%${sanTerm}%'
+            )
     `;
 
     try {
