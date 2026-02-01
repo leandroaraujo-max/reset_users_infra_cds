@@ -542,17 +542,20 @@ function submitResetQueue(requestData) {
 
     if (!queueSheet) {
         queueSheet = ss.insertSheet("Solicitações");
-        queueSheet.appendRow(["DATA_HORA", "FILIAL", "USER_NAME", "NOME", "EMAIL_COLAB", "CENTRO_CUSTO", "ANALISTA_RESPONSAVEL", "SOLICITANTE", "STATUS_PROCESSAMENTO"]);
+        queueSheet.appendRow(["ID", "DATA_HORA", "FILIAL", "USER_NAME", "NOME", "EMAIL_COLAB", "CENTRO_CUSTO", "ANALISTA_RESPONSAVEL", "SOLICITANTE", "STATUS_PROCESSAMENTO"]);
         queueSheet.setTabColor("Blue");
-        queueSheet.getRange(1, 1, 1, 9).setFontWeight("bold").setBackground("#cfe2f3");
+        queueSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#cfe2f3");
     }
 
     const timestamp = new Date();
 
     requestData.users.forEach(u => {
+        // Gera próximo ID para Solicitações
+        const nextId = getNextQueueId(queueSheet);
         queueSheet.appendRow([
+            nextId,
             timestamp,
-            requestData.filial,
+            requestData.filial || u.filial,
             u.user_name,
             u.nome,
             u.email,
@@ -565,6 +568,25 @@ function submitResetQueue(requestData) {
     return true;
 }
 
+/**
+ * Retorna o próximo ID sequencial para a aba Solicitações
+ */
+function getNextQueueId(sheet) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return 1;
+
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    let maxId = 0;
+    ids.forEach(id => {
+        const numId = parseInt(id, 10);
+        if (!isNaN(numId) && numId > maxId) {
+            maxId = numId;
+        }
+    });
+
+    return maxId + 1;
+}
+
 function getQueueWeb() {
     const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
     const sheet = ss.getSheetByName("Solicitações");
@@ -575,15 +597,16 @@ function getQueueWeb() {
 
     const startRow = Math.max(2, lastRow - 99);
     const numRows = lastRow - startRow + 1;
-    const data = sheet.getRange(startRow, 1, numRows, 9).getValues();
+    const data = sheet.getRange(startRow, 1, numRows, 10).getValues();
 
     return data.reverse().map(r => ({
-        data: (r[0] instanceof Date) ? r[0].toISOString() : r[0],
-        filial: String(r[1]),
-        user: r[2],
-        nome: r[3],
-        analista: r[6],
-        status: r[8]
+        id: r[0],
+        data: (r[1] instanceof Date) ? r[1].toISOString() : r[1],
+        filial: String(r[2]),
+        user: r[3],
+        nome: r[4],
+        analista: r[7],
+        status: r[9]
     }));
 }
 
@@ -602,7 +625,7 @@ function getUsuariosAuditados() {
     return set;
 }
 
-// ATUALIZADO: doPost agora processa e salva email_gestor
+// ATUALIZADO: doPost agora processa e salva email_gestor + ID auto-incremental
 function doPost(e) {
     try {
         const data = JSON.parse(e.postData.contents);
@@ -612,9 +635,12 @@ function doPost(e) {
 
         if (!sheetAudit) {
             sheetAudit = ss.insertSheet("Auditoria");
-            sheetAudit.appendRow(["Data/Hora", "Filial/Origem", "Usuário AD", "Nova Senha", "Status", "Executor", "Email Colaborador", "Email Gestor", "Centro de Custo", "Observações"]);
-            sheetAudit.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#D9D9D9");
+            sheetAudit.appendRow(["ID", "Data/Hora", "Filial/Origem", "Usuário AD", "Nova Senha", "Status", "Executor", "Email Colaborador", "Email Gestor", "Centro de Custo", "Observações"]);
+            sheetAudit.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#D9D9D9");
         }
+
+        // Gera próximo ID sequencial
+        const nextId = getNextAuditId(sheetAudit);
 
         // ALTERAÇÃO: Adiciona email_gestor e email_status na auditoria
         const emailGestor = data.email_gestor || "";
@@ -622,6 +648,7 @@ function doPost(e) {
         const emailStatus = data.email_status || "N/A"; // Status do envio de email
 
         sheetAudit.appendRow([
+            nextId,
             data.data_hora,
             data.filial,
             data.user_name,
@@ -656,6 +683,73 @@ function doPost(e) {
     } catch (err) {
         return ContentService.createTextOutput("Erro Interno: " + err.message).setMimeType(ContentService.MimeType.TEXT);
     }
+}
+
+/**
+ * Retorna o próximo ID sequencial para a aba Auditoria
+ */
+function getNextAuditId(sheet) {
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return 1; // Primeira solicitação
+
+    // Lê todos os IDs existentes na coluna A (exceto cabeçalho)
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+
+    // Encontra o maior ID numérico
+    let maxId = 0;
+    ids.forEach(id => {
+        const numId = parseInt(id, 10);
+        if (!isNaN(numId) && numId > maxId) {
+            maxId = numId;
+        }
+    });
+
+    return maxId + 1;
+}
+
+/**
+ * FUNÇÃO UTILITÁRIA: Numera registros existentes na aba Auditoria
+ * Execute manualmente uma vez para preencher IDs em registros antigos
+ */
+function NUMERAR_AUDITORIA_EXISTENTE() {
+    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const sheet = ss.getSheetByName("Auditoria");
+    if (!sheet) throw new Error("Aba Auditoria não encontrada.");
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) throw new Error("Nenhum registro para numerar.");
+
+    // Verifica se primeira coluna é "ID" no cabeçalho
+    const header = sheet.getRange(1, 1).getValue();
+    if (String(header).toUpperCase() !== "ID") {
+        throw new Error("A coluna A deve ter o cabeçalho 'ID'. Ajuste a planilha manualmente.");
+    }
+
+    // Gera IDs sequenciais para linhas sem ID
+    const existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    const updates = [];
+
+    let currentId = 1;
+    for (let i = 0; i < existingIds.length; i++) {
+        const val = existingIds[i][0];
+        if (!val || val === "" || val === null) {
+            updates.push([currentId]);
+        } else {
+            // Mantém ID existente se válido
+            const existingNum = parseInt(val, 10);
+            if (!isNaN(existingNum)) {
+                currentId = existingNum;
+                updates.push([existingNum]);
+            } else {
+                updates.push([currentId]);
+            }
+        }
+        currentId++;
+    }
+
+    // Escreve todos os IDs de volta
+    sheet.getRange(2, 1, updates.length, 1).setValues(updates);
+    Logger.log("Numeração concluída. " + updates.length + " registros processados.");
 }
 
 // =========================================================================

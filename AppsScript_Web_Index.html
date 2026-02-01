@@ -481,6 +481,12 @@
                             <table class="min-w-full divide-y divide-gray-200">
                                 <thead class="bg-gray-50">
                                     <tr>
+                                        <th @click="sortQueue('id')"
+                                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 w-16">
+                                            ID
+                                            <span v-if="sortColumn === 'id'" class="ml-1">{{ sortDirection === 'asc' ?
+                                                '↑' : '↓' }}</span>
+                                        </th>
                                         <th @click="sortQueue('data')"
                                             class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                                             Data
@@ -511,8 +517,12 @@
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="item in paginatedQueue" :key="item.data + item.user"
+                                    <tr v-for="item in paginatedQueue" :key="item.id || (item.data + item.user)"
                                         class="hover:bg-gray-50">
+                                        <td
+                                            class="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-600 bg-gray-50">
+                                            #{{ item.id || '-' }}
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{
                                             formatDate(item.data) }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.filial }}
@@ -532,7 +542,7 @@
                                         </td>
                                     </tr>
                                     <tr v-if="paginatedQueue.length === 0">
-                                        <td colspan="5" class="px-6 py-10 text-center text-gray-400">Nenhum registro
+                                        <td colspan="6" class="px-6 py-10 text-center text-gray-400">Nenhum registro
                                             encontrado com os filtros selecionados.</td>
                                     </tr>
                                 </tbody>
