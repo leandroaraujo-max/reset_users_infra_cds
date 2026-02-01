@@ -1,14 +1,16 @@
-﻿# --- VERSÃO 1.0.1 (RELEASE OFICIAL - SISTEMA COMPLETO) ---
-Write-Host "--- VERSÃO 1.0.1 CARREGADA ---" -ForegroundColor Cyan
+﻿# --- VERSÃO 1.0.5 (RELEASE OFICIAL - SISTEMA COMPLETO) ---
+Write-Host "--- VERSÃO 1.0.5 CARREGADA ---" -ForegroundColor Cyan
 
 # ==========================================================================
 # CONFIGURAÇÃO CENTRAL
 # ==========================================================================
 # COLE AQUI A SUA URL DA IMPLANTAÇÃO (EXEC):
-$API_URL = "https://script.google.com/macros/s/AKfycbw3RwP4dr5bx8N_yhFT4dDO0bHT10veT7UKa5RizCdLGRmp1ogEYqtIiqpE7ABbx-Ri/exec"
+$API_URL = "https://script.google.com/macros/s/AKfycbzUIefAXuloflIzC8aNSc5YU3DAX9Ih6B6NH4Of_3pr_Aicn3VoivsaNYBGm1laLOPB/exec"
 
 # --- PRÉ-REQUISITOS DE SEGURANÇA ---
+# --- PRÉ-REQUISITOS DE SEGURANÇA ---
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+[Net.ServicePointManager]::CheckCertificateRevocationList = $false
 
 # Verifica módulo AD (Ignorar se for teste fora do ambiente de domínio, mas ideal ter instalado)
 if (-not (Get-Module -ListAvailable -Name ActiveDirectory)) {
@@ -90,179 +92,226 @@ function global:Invoke-Retry {
 }
 
 # --- CONFIGURAÇÃO DA INTERFACE (GUI) ---
+# --- CONFIGURAÇÃO DA INTERFACE (GUI) - VISUAL MODERNO ---
+$MagaluBlue = [System.Drawing.ColorTranslator]::FromHtml("#0086FF")
+$MagaluDark = [System.Drawing.ColorTranslator]::FromHtml("#004499")
+$MagaluBg = [System.Drawing.ColorTranslator]::FromHtml("#F0F4F8")
+$White = [System.Drawing.Color]::White
+
 $mainForm = New-Object System.Windows.Forms.Form
-$mainForm.Text = "AD Reset Tool v1.0.0 - Gestão Centralizada"
+$mainForm.Text = "Reset de Usuários - Suporte Infra CDs v1.0.5"
 $mainForm.Size = New-Object System.Drawing.Size(1200, 850)
 $mainForm.StartPosition = "CenterScreen"
-$mainForm.BackColor = [System.Drawing.Color]::WhiteSmoke
+$mainForm.BackColor = $MagaluBg
 $mainForm.WindowState = [System.Windows.Forms.FormWindowState]::Maximized
 
-# Barra de Status (Criada antes para usar no log de carregamento)
+# --- HEADER GRADIENTE (Adicionado PRIMEIRO para ficar NO TOPO visualmente via ordem de inserção padrão) ---
+$pnlHeader = New-Object System.Windows.Forms.Panel
+$pnlHeader.Dock = "Top"
+$pnlHeader.Height = 100
+$pnlHeader.BackColor = $MagaluDark
+$pnlHeader.Add_Paint({
+        param($evtSender, $e)
+        $rect = $evtSender.ClientRectangle
+        $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $MagaluDark, $MagaluBlue, [System.Drawing.Drawing2D.LinearGradientMode]::ForwardDiagonal)
+        $e.Graphics.FillRectangle($brush, $rect)
+    })
+$mainForm.Controls.Add($pnlHeader)
+
+$lblTitle = New-Object System.Windows.Forms.Label
+$lblTitle.Text = "Reset de Usuários"
+$lblTitle.ForeColor = $White
+$lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 24, [System.Drawing.FontStyle]::Bold)
+$lblTitle.AutoSize = $true
+$lblTitle.Location = New-Object System.Drawing.Point(20, 15)
+$lblTitle.BackColor = [System.Drawing.Color]::Transparent
+$pnlHeader.Controls.Add($lblTitle)
+
+$lblSub = New-Object System.Windows.Forms.Label
+$lblSub.Text = "Suporte Infra CDs"
+$lblSub.ForeColor = [System.Drawing.Color]::FromArgb(200, 255, 255, 255)
+$lblSub.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$lblSub.AutoSize = $true
+$lblSub.Location = New-Object System.Drawing.Point(25, 65)
+$lblSub.BackColor = [System.Drawing.Color]::Transparent
+$pnlHeader.Controls.Add($lblSub)
+
+# --- RAINBOW STRIP (Adicionado DEPOIS para ficar ABAIXO do Header) ---
+$pnlRainbow = New-Object System.Windows.Forms.Panel
+$pnlRainbow.Dock = "Top"
+$pnlRainbow.Height = 5
+$pnlRainbow.Add_Paint({
+        param($s, $e)
+        $colors = @("#E91E76", "#FF5722", "#FF9800", "#4CAF50", "#2196F3", "#9C27B0")
+        $w = $s.Width / $colors.Count
+        for ($i = 0; $i -lt $colors.Count; $i++) {
+            $c = [System.Drawing.ColorTranslator]::FromHtml($colors[$i])
+            $b = New-Object System.Drawing.SolidBrush($c)
+            $e.Graphics.FillRectangle($b, ($i * $w), 0, $w, $s.Height)
+        }
+    })
+$mainForm.Controls.Add($pnlRainbow)
+
+# Barra de Status
 $statusStrip = New-Object System.Windows.Forms.StatusStrip
 $statusLabel = New-Object System.Windows.Forms.ToolStripStatusLabel
 $statusLabel.Text = "Iniciando..."
 $statusStrip.Items.Add($statusLabel) | Out-Null
 $mainForm.Controls.Add($statusStrip)
 
+# --- CONTAINER PRINCIPAL (Padding) ---
+$pnlContent = New-Object System.Windows.Forms.Panel
+$pnlContent.Dock = "Fill"
+$pnlContent.Padding = New-Object System.Windows.Forms.Padding(20)
+$mainForm.Controls.Add($pnlContent)
+$pnlContent.BringToFront()
+
 # ==========================================================================
 # SEÇÃO 1: SELEÇÃO DO ANALISTA (DINÂMICO)
 # ==========================================================================
-$grpSeguranca = New-Object System.Windows.Forms.GroupBox
-$grpSeguranca.Location = New-Object System.Drawing.Point(20, 10)
-$grpSeguranca.Size = New-Object System.Drawing.Size(300, 80)
-$grpSeguranca.Text = "Identificação do Analista"
-$grpSeguranca.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$mainForm.Controls.Add($grpSeguranca)
+# ==========================================================================
+# SEÇÃO 1, 2, 3: CARDS DE INPUT
+# ==========================================================================
+# Função Helper para criar "Card"
+# Função Helper para criar "Card"
+function New-CardPanel {
+    param(
+        [int]$panelX, 
+        [int]$panelY, 
+        [int]$panelWidth, 
+        [int]$panelHeight, 
+        [string]$panelTitle
+    )
+    
+    $p = New-Object System.Windows.Forms.Panel
+    $p.Location = New-Object System.Drawing.Point($panelX, $panelY)
+    $p.Size = New-Object System.Drawing.Size($panelWidth, $panelHeight)
+    $p.BackColor = [System.Drawing.Color]::White
+    # Borda simples (WinForms não tem shadow nativa fácil)
+    $p.BorderStyle = "FixedSingle" 
+    
+    $l = New-Object System.Windows.Forms.Label
+    $l.Text = $panelTitle
+    $l.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
+    $l.ForeColor = [System.Drawing.Color]::Gray
+    
+    # Cálculo Explícito de Largura
+    $labelWidth = $panelWidth - 20
+    $l.Location = New-Object System.Drawing.Point(10, 10)
+    $l.Size = New-Object System.Drawing.Size($labelWidth, 20)
+    
+    $p.Controls.Add($l)
+    return $p
+}
+
+# CARD 1: ANALISTA
+$cardAnalista = New-CardPanel 20 20 300 100 "Identificação do Analista"
+$pnlContent.Controls.Add($cardAnalista)
 
 $lblAnalista = New-Object System.Windows.Forms.Label
-$lblAnalista.Location = New-Object System.Drawing.Point(10, 25); $lblAnalista.Size = New-Object System.Drawing.Size(280, 20)
+$lblAnalista.Location = New-Object System.Drawing.Point(10, 35); $lblAnalista.Size = New-Object System.Drawing.Size(280, 20)
 $lblAnalista.Text = "Selecione seu nome:"
-$lblAnalista.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
-$grpSeguranca.Controls.Add($lblAnalista)
+$cardAnalista.Controls.Add($lblAnalista)
 
 $cbAnalista = New-Object System.Windows.Forms.ComboBox
-$cbAnalista.Location = New-Object System.Drawing.Point(10, 45); $cbAnalista.Size = New-Object System.Drawing.Size(280, 25)
-$cbAnalista.DropDownStyle = "DropDownList" # Bloqueia digitação por padrão
-$cbAnalista.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Regular)
-$grpSeguranca.Controls.Add($cbAnalista)
+$cbAnalista.Location = New-Object System.Drawing.Point(10, 60); $cbAnalista.Size = New-Object System.Drawing.Size(280, 25)
+$cbAnalista.DropDownStyle = "DropDownList"
+$cardAnalista.Controls.Add($cbAnalista)
 
-# --- CARREGAMENTO DA LISTA DE ANALISTAS (API) ---
-# Executa a busca antes de liberar a interface para o usuário
+# API CALL (Analistas)
 try {
     $statusLabel.Text = "Buscando lista de analistas na nuvem..."
     $mainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     [System.Windows.Forms.Application]::DoEvents()
-
-    # URL com o novo parâmetro mode=get_analysts
     $urlAnalistas = $API_URL + "?mode=get_analysts"
-    
-    # Chama API com Retry
-    $analistasRemotos = Invoke-Retry -ScriptBlock { 
-        Invoke-RestMethod -Uri $urlAnalistas -Method Get -ErrorAction Stop 
-    } -ErrorMessage "Falha ao buscar analistas"
-
+    $analistasRemotos = Invoke-Retry -ScriptBlock { Invoke-RestMethod -Uri $urlAnalistas -Method Get -ErrorAction Stop } -ErrorMessage "Falha ao buscar analistas"
     if ($analistasRemotos -is [System.Array] -and $analistasRemotos.Count -gt 0) {
-        # Adiciona a opção TODOS no início da lista
         $cbAnalista.Items.Add("TODOS") | Out-Null
         $cbAnalista.Items.AddRange($analistasRemotos)
-        Write-Host "Sucesso: $($analistasRemotos.Count) analistas carregados." -ForegroundColor Green
     }
-    else {
-        throw "Lista vazia ou formato inválido."
-    }
+    else { throw "Vazio" }
 }
 catch {
-    # Fallback: Se der erro, permite digitar o nome manualmente
-    Write-Host "Erro ao carregar analistas: $_" -ForegroundColor Red
-    $statusLabel.Text = "Erro ao carregar lista. Modo manual ativado."
-    $cbAnalista.Items.Add("TODOS") | Out-Null
-    $cbAnalista.Items.Add("--- DIGITE SEU NOME ---")
-    $cbAnalista.DropDownStyle = "DropDown" # Libera digitação
+    $cbAnalista.Items.Add("TODOS"); $cbAnalista.Items.Add("--- DIGITE SEU NOME ---")
+    $cbAnalista.DropDownStyle = "DropDown"
 }
-finally {
-    $mainForm.Cursor = [System.Windows.Forms.Cursors]::Default
-}
+finally { $mainForm.Cursor = [System.Windows.Forms.Cursors]::Default }
 
 
-# ==========================================================================
-# SEÇÃO 2: BUSCA (TOPO MEIO)
-# ==========================================================================
-$grpBusca = New-Object System.Windows.Forms.GroupBox
-$grpBusca.Location = New-Object System.Drawing.Point(340, 10)
-$grpBusca.Size = New-Object System.Drawing.Size(350, 80)
-$grpBusca.Text = "Busca de Demandas"
-$mainForm.Controls.Add($grpBusca)
+# CARD 2: BUSCA
+$cardBusca = New-CardPanel 340 20 350 100 "Busca de Demandas"
+$pnlContent.Controls.Add($cardBusca)
 
 $lblFilial = New-Object System.Windows.Forms.Label
-$lblFilial.Location = New-Object System.Drawing.Point(10, 20); $lblFilial.Size = New-Object System.Drawing.Size(200, 20)
+$lblFilial.Location = New-Object System.Drawing.Point(10, 35); $lblFilial.Size = New-Object System.Drawing.Size(100, 20)
 $lblFilial.Text = "Filial (Nº) ou *:"
-$grpBusca.Controls.Add($lblFilial)
+$cardBusca.Controls.Add($lblFilial)
 
 $txtFilial = New-Object System.Windows.Forms.TextBox
-$txtFilial.Location = New-Object System.Drawing.Point(10, 40); $txtFilial.Size = New-Object System.Drawing.Size(100, 25)
-$txtFilial.Text = "*" # Default
-$grpBusca.Controls.Add($txtFilial)
+$txtFilial.Location = New-Object System.Drawing.Point(10, 60); $txtFilial.Size = New-Object System.Drawing.Size(100, 25)
+$txtFilial.Text = "*"
+$cardBusca.Controls.Add($txtFilial)
 
 $btnBuscar = New-Object System.Windows.Forms.Button
-$btnBuscar.Location = New-Object System.Drawing.Point(120, 38); $btnBuscar.Size = New-Object System.Drawing.Size(200, 28)
+$btnBuscar.Location = New-Object System.Drawing.Point(120, 58); $btnBuscar.Size = New-Object System.Drawing.Size(200, 28)
 $btnBuscar.Text = "Carregar Demandas"
-$btnBuscar.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 215); $btnBuscar.ForeColor = [System.Drawing.Color]::White
-$grpBusca.Controls.Add($btnBuscar)
+$btnBuscar.BackColor = $MagaluBlue; $btnBuscar.ForeColor = "White"; $btnBuscar.FlatStyle = "Flat"
+$btnBuscar.FlatAppearance.BorderSize = 0
+$cardBusca.Controls.Add($btnBuscar)
 
-# ==========================================================================
-# SEÇÃO 3: BUSCA INDIVIDUAL
-# ==========================================================================
-$grpIndiv = New-Object System.Windows.Forms.GroupBox
-$grpIndiv.Location = New-Object System.Drawing.Point(710, 10)
-$grpIndiv.Size = New-Object System.Drawing.Size(300, 80)
-$grpIndiv.Text = "Busca Direta (Emergência)"
-$mainForm.Controls.Add($grpIndiv)
+# CARD 3: DIRETA
+$cardIndiv = New-CardPanel 710 20 300 100 "Busca Direta (Emergência)"
+$pnlContent.Controls.Add($cardIndiv)
 
 $lblUserUnico = New-Object System.Windows.Forms.Label
-$lblUserUnico.Location = New-Object System.Drawing.Point(10, 20); $lblUserUnico.Size = New-Object System.Drawing.Size(150, 20)
-$lblUserUnico.Text = "Usuário (Login):"
-$grpIndiv.Controls.Add($lblUserUnico)
+$lblUserUnico.Location = New-Object System.Drawing.Point(10, 35); $lblUserUnico.Size = New-Object System.Drawing.Size(100, 20)
+$lblUserUnico.Text = "Usuário:"
+$cardIndiv.Controls.Add($lblUserUnico)
 
 $txtUserUnico = New-Object System.Windows.Forms.TextBox
-$txtUserUnico.Location = New-Object System.Drawing.Point(10, 40); $txtUserUnico.Size = New-Object System.Drawing.Size(120, 25)
-$grpIndiv.Controls.Add($txtUserUnico)
+$txtUserUnico.Location = New-Object System.Drawing.Point(10, 60); $txtUserUnico.Size = New-Object System.Drawing.Size(120, 25)
+$cardIndiv.Controls.Add($txtUserUnico)
 
 $btnBuscarUnico = New-Object System.Windows.Forms.Button
-$btnBuscarUnico.Location = New-Object System.Drawing.Point(140, 38); $btnBuscarUnico.Size = New-Object System.Drawing.Size(140, 28)
+$btnBuscarUnico.Location = New-Object System.Drawing.Point(140, 58); $btnBuscarUnico.Size = New-Object System.Drawing.Size(140, 28)
 $btnBuscarUnico.Text = "Resetar Avulso"
-$btnBuscarUnico.BackColor = [System.Drawing.Color]::Purple; $btnBuscarUnico.ForeColor = [System.Drawing.Color]::White
-$grpIndiv.Controls.Add($btnBuscarUnico)
+$btnBuscarUnico.BackColor = "Purple"; $btnBuscarUnico.ForeColor = "White"; $btnBuscarUnico.FlatStyle = "Flat"
+$cardIndiv.Controls.Add($btnBuscarUnico)
 
+# CARD 4: OPÇÕES
+$cardOpcoes = New-CardPanel 20 140 1140 60 "Configurações de Reset"
+$cardOpcoes.Anchor = "Top, Left, Right"
+$pnlContent.Controls.Add($cardOpcoes)
 
-# ==========================================================================
-# OPÇÕES DE CONFIGURAÇÃO (TAB)
-# ==========================================================================
-$tabControl = New-Object System.Windows.Forms.TabControl
-$tabControl.Location = New-Object System.Drawing.Point(20, 100)
-$tabControl.Size = New-Object System.Drawing.Size(1140, 100)
-$tabControl.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-
-$tabOpcoes = New-Object System.Windows.Forms.TabPage
-$tabOpcoes.Text = "Opções de Conta"
-$tabOpcoes.BackColor = [System.Drawing.Color]::WhiteSmoke
-$tabControl.Controls.Add($tabOpcoes)
-
-$chkEmail = New-Object System.Windows.Forms.CheckBox
-$chkEmail.Location = New-Object System.Drawing.Point(20, 15); $chkEmail.Size = New-Object System.Drawing.Size(280, 20)
-$chkEmail.Text = "Enviar E-mails (Gestor/Colaborador)"
-$chkEmail.Checked = $true
-$tabOpcoes.Controls.Add($chkEmail)
-
-$chkUnlock = New-Object System.Windows.Forms.CheckBox
-$chkUnlock.Location = New-Object System.Drawing.Point(20, 40); $chkUnlock.Size = New-Object System.Drawing.Size(280, 20)
-$chkUnlock.Text = "Desbloquear Conta (Unlock)"
-$chkUnlock.Checked = $true
-$tabOpcoes.Controls.Add($chkUnlock)
-
-$chkPwdPolicy = New-Object System.Windows.Forms.CheckBox
-$chkPwdPolicy.Location = New-Object System.Drawing.Point(350, 15); $chkPwdPolicy.Size = New-Object System.Drawing.Size(250, 20)
-$chkPwdPolicy.Text = "Forçar Expiração Mensal (GPO)"
-$chkPwdPolicy.Checked = $true
-$tabOpcoes.Controls.Add($chkPwdPolicy)
-
-$chkAtivar = New-Object System.Windows.Forms.CheckBox
-$chkAtivar.Location = New-Object System.Drawing.Point(350, 40); $chkAtivar.Size = New-Object System.Drawing.Size(250, 20)
-$chkAtivar.Text = "Ativar conta (se desativada)"
-$tabOpcoes.Controls.Add($chkAtivar)
-
-$mainForm.Controls.Add($tabControl)
+$chkEmail = New-Object System.Windows.Forms.CheckBox; $chkEmail.Location = New-Object System.Drawing.Point(20, 35); $chkEmail.Size = New-Object System.Drawing.Size(250, 20); $chkEmail.Text = "Enviar E-mails"; $chkEmail.Checked = $true; $cardOpcoes.Controls.Add($chkEmail)
+$chkUnlock = New-Object System.Windows.Forms.CheckBox; $chkUnlock.Location = New-Object System.Drawing.Point(280, 35); $chkUnlock.Size = New-Object System.Drawing.Size(250, 20); $chkUnlock.Text = "Desbloquear Conta"; $chkUnlock.Checked = $true; $cardOpcoes.Controls.Add($chkUnlock)
+$chkPwdPolicy = New-Object System.Windows.Forms.CheckBox; $chkPwdPolicy.Location = New-Object System.Drawing.Point(540, 35); $chkPwdPolicy.Size = New-Object System.Drawing.Size(250, 20); $chkPwdPolicy.Text = "Forçar Expiração (GPO)"; $chkPwdPolicy.Checked = $true; $cardOpcoes.Controls.Add($chkPwdPolicy)
+$chkAtivar = New-Object System.Windows.Forms.CheckBox; $chkAtivar.Location = New-Object System.Drawing.Point(800, 35); $chkAtivar.Size = New-Object System.Drawing.Size(250, 20); $chkAtivar.Text = "Ativar conta"; $cardOpcoes.Controls.Add($chkAtivar)
 
 # ==========================================================================
 # GRID E CONSOLE
 # ==========================================================================
+# ==========================================================================
+# GRID E CONSOLE
+# ==========================================================================
 $dataGridView = New-Object System.Windows.Forms.DataGridView
-$dataGridView.Location = New-Object System.Drawing.Point(20, 240)
+$dataGridView.Location = New-Object System.Drawing.Point(20, 220)
 $dataGridView.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$dataGridView.Size = New-Object System.Drawing.Size(1140, 310)
-$dataGridView.AutoSizeColumnsMode = "Fill"; $dataGridView.AllowUserToAddRows = $false; $dataGridView.ReadOnly = $true
+$dataGridView.Size = New-Object System.Drawing.Size(1140, 250)
+$dataGridView.AutoSizeColumnsMode = "Fill"
+$dataGridView.AllowUserToAddRows = $false
+$dataGridView.ReadOnly = $true
 $dataGridView.BackgroundColor = [System.Drawing.Color]::White
+$dataGridView.BorderStyle = "None"
+$dataGridView.EnableHeadersVisualStyles = $false
+$dataGridView.ColumnHeadersDefaultCellStyle.BackColor = $MagaluBlue
+$dataGridView.ColumnHeadersDefaultCellStyle.ForeColor = [System.Drawing.Color]::White
+$dataGridView.ColumnHeadersDefaultCellStyle.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+$dataGridView.GridColor = [System.Drawing.Color]::LightGray
 
 $dataGridView.Columns.Clear()
+$dataGridView.Columns.Add("IDSolicitacao", "ID Solicitação") | Out-Null
+$dataGridView.Columns.Add("IDColaborador", "ID Colab") | Out-Null
 $dataGridView.Columns.Add("Filial", "Filial / Origem") | Out-Null
 $dataGridView.Columns.Add("User", "Usuário AD") | Out-Null
 $dataGridView.Columns.Add("Nome", "Nome Funcionário") | Out-Null
@@ -272,20 +321,24 @@ $dataGridView.Columns.Add("EmailGestor", "E-mail Gestor") | Out-Null
 $dataGridView.Columns.Add("CC", "Centro de Custo") | Out-Null 
 $dataGridView.Columns.Add("SenhaNova", "Nova Senha") | Out-Null
 $dataGridView.Columns.Add("Audit", "Já Resetado?") | Out-Null
-$dataGridView.Columns.Add("Lideranca", "Liderança (Status Email)") | Out-Null
+$dataGridView.Columns.Add("Lideranca", "Liderança") | Out-Null
 $dataGridView.Columns.Add("Status", "Status Reset") | Out-Null
+
+$dataGridView.Columns["IDSolicitacao"].Width = 60
+$dataGridView.Columns["IDColaborador"].Width = 80
 $dataGridView.Columns["Email"].Visible = $false
 $dataGridView.Columns["EmailGestor"].Visible = $false
 $dataGridView.Columns["Audit"].Visible = $false
-$dataGridView.Columns["CC"].Visible = $true 
-$mainForm.Controls.Add($dataGridView)
+# $pnlContent uses mainForm.Controls.Add($dataGridView) relative logic if used inside Panel, 
+# but grid is large so let's add to pnlContent
+$pnlContent.Controls.Add($dataGridView)
 
 $grpConsole = New-Object System.Windows.Forms.GroupBox
 $grpConsole.Text = "Log de Execução"
-$grpConsole.Location = New-Object System.Drawing.Point(20, 560)
+$grpConsole.Location = New-Object System.Drawing.Point(20, 480)
 $grpConsole.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
-$grpConsole.Size = New-Object System.Drawing.Size(1140, 120)
-$mainForm.Controls.Add($grpConsole)
+$grpConsole.Size = New-Object System.Drawing.Size(1140, 100)
+$pnlContent.Controls.Add($grpConsole)
 
 $txtConsole = New-Object System.Windows.Forms.TextBox
 $txtConsole.Multiline = $true
@@ -612,25 +665,27 @@ function Send-TuriaRequestEmail {
 # ==========================================================================
 $btnReset = New-Object System.Windows.Forms.Button
 $btnReset.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
-$btnReset.Location = New-Object System.Drawing.Point(20, 690); $btnReset.Size = New-Object System.Drawing.Size(220, 40)
-$btnReset.Text = "EXECUTAR PROCESSO"; $btnReset.BackColor = [System.Drawing.Color]::ForestGreen; $btnReset.ForeColor = [System.Drawing.Color]::White; $btnReset.Enabled = $false
+$btnReset.Location = New-Object System.Drawing.Point(20, 600); $btnReset.Size = New-Object System.Drawing.Size(220, 40)
+$btnReset.Text = "EXECUTAR PROCESSO"; $btnReset.BackColor = [System.Drawing.Color]::ForestGreen; $btnReset.ForeColor = "White"; $btnReset.Enabled = $false
 $btnReset.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
-$mainForm.Controls.Add($btnReset)
+$btnReset.FlatStyle = "Flat"; $btnReset.FlatAppearance.BorderSize = 0
+$pnlContent.Controls.Add($btnReset)
 
 $btnExport = New-Object System.Windows.Forms.Button
 $btnExport.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left
-$btnExport.Location = New-Object System.Drawing.Point(260, 690); $btnExport.Size = New-Object System.Drawing.Size(160, 40)
-$btnExport.Text = "Exportar Pendentes"; $btnExport.BackColor = [System.Drawing.Color]::Orange; $btnExport.Enabled = $false
+$btnExport.Location = New-Object System.Drawing.Point(260, 600); $btnExport.Size = New-Object System.Drawing.Size(160, 40)
+$btnExport.Text = "Exportar Pendentes"; $btnExport.BackColor = "Orange"; $btnExport.Enabled = $false
 $btnExport.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$mainForm.Controls.Add($btnExport)
+$btnExport.FlatStyle = "Flat"; $btnExport.FlatAppearance.BorderSize = 0
+$pnlContent.Controls.Add($btnExport)
 
 $lblAssinatura = New-Object System.Windows.Forms.Label
-$lblAssinatura.Text = "AD Reset Tool v1.0.0"
+$lblAssinatura.Text = "Reset de Usuários - Suporte Infra CDs v1.0.5"
 $lblAssinatura.AutoSize = $true
 $lblAssinatura.ForeColor = [System.Drawing.Color]::Gray
 $lblAssinatura.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Right
-$lblAssinatura.Location = New-Object System.Drawing.Point(1000, 700)
-$mainForm.Controls.Add($lblAssinatura)
+$lblAssinatura.Location = New-Object System.Drawing.Point(800, 610)
+$pnlContent.Controls.Add($lblAssinatura)
 
 # ==========================================================================
 # LÓGICA 1: CARGA (GET) + FILTRAGEM
@@ -706,8 +761,12 @@ function CarregarDados($urlSufix) {
             
             # Prepara texto da coluna Liderança
             $liderancaTexto = if ($emailGestor) { $emailGestor } else { "Sem gestor" }
+            
+            # IDs
+            $idSolicitacao = if ($user.id_solicitacao) { $user.id_solicitacao } else { "" }
+            $idColab = if ($user.id_colaborador) { $user.id_colaborador } else { "" }
 
-            $rowId = $dataGridView.Rows.Add($origem, $user.user_name, $nomeFormatado, $atribuido, $email, $emailGestor, $cc, $senha, $jaResetado, $liderancaTexto, "Pendente")
+            $rowId = $dataGridView.Rows.Add($idSolicitacao, $idColab, $origem, $user.user_name, $nomeFormatado, $atribuido, $email, $emailGestor, $cc, $senha, $jaResetado, $liderancaTexto, "Pendente")
             
             if ($atribuido -eq "N/A") {
                 $dataGridView.Rows[$rowId].Cells["Analista"].Value = "LIVRE (N/A)"
@@ -720,7 +779,8 @@ function CarregarDados($urlSufix) {
             }
             
             if ($jaResetado) {
-                $dataGridView.Rows[$rowId].DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGoldenrodYellow
+                # Alternativa para LightGoldenrodYellow
+                $dataGridView.Rows[$rowId].DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 205) 
                 $dataGridView.Rows[$rowId].Cells["Status"].Value = "JÁ AUDITADO"
             }
         }
@@ -867,6 +927,7 @@ $btnReset.Add_Click({
                 
                 # ENVIO DO LOG PARA API (APÓS email para registrar status correto)
                 $p = @{
+                    id_solicitacao    = $row.Cells["IDSolicitacao"].Value;
                     data_hora         = (Get-Date).ToString("dd/MM/yyyy HH:mm");
                     filial            = $origem;
                     user_name         = $userAD;
@@ -919,6 +980,7 @@ $btnReset.Add_Click({
                             
                             # Envia log para API para remover da fila
                             $pTuria = @{
+                                id_solicitacao    = $row.Cells["IDSolicitacao"].Value;
                                 data_hora         = (Get-Date).ToString("dd/MM/yyyy HH:mm");
                                 filial            = $origem;
                                 user_name         = $userAD;

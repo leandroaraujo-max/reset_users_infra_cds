@@ -1,4 +1,4 @@
-# 🔐 AD Reset Tool v1.0.6
+# 🔐 Reset de Usuários - Suporte Infra CDs v1.0.5
 
 ## Sobre o Projeto
 Ferramenta desenvolvida em PowerShell com interface gráfica (Windows Forms) para automatizar o processo de reset de senhas de usuários do Active Directory e criações de conta no Turia.
@@ -76,20 +76,18 @@ clasp deploy -i <DEPLOYMENT_ID> -d "Descrição"
 
 ## Histórico de Versões
 
-### v1.0.6 (Atual)
+### v1.0.5 (Atual)
+- [PowerShell] Refinamento de layout: Ordem correta do Header e Faixa Rainbow
+- [PowerShell] Correção de sobreposição de textos no cabeçalho
+- [PowerShell] Fix SSL/CRL: Adicionado bypass de revogação para conexão estável com a API
 - [Frontend] Novo link "Esqueci Minha Senha" na tela de login
 - [Frontend] Navegação "Voltar para Home" ao clicar no título
 - [Frontend] Placeholder de filial atualizado para "Digite sua filial Magalog"
 - [Frontend] Tabelas com ordenação de colunas (sortable columns)
 - [Frontend] Fila de Atendimento sem limite de linhas e com filtro por Filial
+- [Backend] ID auto-incremental nas abas **Auditoria** e **Solicitações**
 - [UI] Refinamento estético geral (Look & Feel Magalu)
-
-### v1.0.5
-- [Backend] ID auto-incremental na aba **Auditoria**
-- [Backend] ID auto-incremental na aba **Solicitações**
-- [Frontend] Coluna **ID** visível na Fila de Acompanhamento
-- [Frontend] Ordenação por ID habilitada
-- Funções utilitárias para numerar registros existentes
+- [UI] Título do sistema unificado como "Reset de Usuários - Suporte Infra CDs"
 
 ### v1.0.4
 - [Backend] Adicionado campo ID na Auditoria
