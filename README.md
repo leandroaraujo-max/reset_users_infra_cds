@@ -87,7 +87,13 @@ clasp deploy -i <DEPLOYMENT_ID> -d "Descrição"
 
 ## Histórico de Versões
 
-### v1.0.6 (Atual)
+### v1.0.7 (Atual)
+- [Auth] **Nova Autenticação**: Implementado Login com Google (Google Sign-In).
+- [Backend] Adicionada validação de domínios corporativos (@magazineluiza.com.br, @luizalabs.com, etc).
+- [Frontend] Removido formulário de login manual e fluxos de recuperação de senha.
+- [Security] Acesso restrito via `Session.getActiveUser()`.
+
+### v1.0.6
 - [Daemon] Corrigido loop infinito de "ID não encontrado" (parâmetro `requestId` vs `id`).
 - [Backend] Corrigido erro "Parâmetros inválidos" no link de aprovação por email.
 - [Backend] Atualizado para aceitar status `GRUPOS_ENCONTRADOS` do Daemon como sucesso.
