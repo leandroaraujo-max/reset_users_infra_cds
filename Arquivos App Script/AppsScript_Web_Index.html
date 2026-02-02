@@ -1218,7 +1218,7 @@
 
                 const pollMirrorStatus = (reqId) => {
                     let attempts = 0;
-                    const maxAttempts = 30; // 60 segundos (2s interval)
+                    const maxAttempts = 90; // 180 segundos (3 min) para garantir que o schedule de 1 min rode
 
                     if (mirrorPollInterval.value) clearInterval(mirrorPollInterval.value);
 
