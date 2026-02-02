@@ -73,7 +73,7 @@ try {
 
         } catch {
             $erroMsg = $_.Exception.Message
-            Write-Log "ERRO ao consultar AD para $usuarioModelo: $erroMsg"
+            Write-Log "ERRO ao consultar AD para $($usuarioModelo): $erroMsg"
 
             # Envia erro para o Google para atualizar status
             $payload = @{
