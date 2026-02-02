@@ -35,14 +35,26 @@ try {
 
     Write-Host "Conectando API..." -NoNewline -ForegroundColor Gray
     
-    $response = Invoke-RestMethod -Uri "$API_URL?mode=check_mirror_queue" -Method Get -ErrorAction Stop
+    # Força TLS 1.2 (Essencial para conexões modernas Google/AWS)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     
-    Write-Host " [OK]" -ForegroundColor Green
-
+    try {
+        $response = Invoke-RestMethod -Uri "$API_URL?mode=check_mirror_queue" -Method Get -TimeoutSec 30 -ErrorAction Stop
+        Write-Host " [OK]" -ForegroundColor Green
+    } catch {
+        Write-Host " [FALHA]" -ForegroundColor Red
+        Write-Host "DETALHE DO ERRO: $($_.Exception.Message)" -ForegroundColor Yellow
+        if ($_.Exception.InnerException) {
+            Write-Host "Inner Exception: $($_.Exception.InnerException.Message)" -ForegroundColor DarkYellow
+        }
+        Write-Log "Falha de conexão: $($_.Exception.Message)"
+        exit
+    }
+    
     # Verifica se há solicitações
     if (-not $response -or $response.Count -eq 0) {
-        Write-Host "Nenhuma solicitação pendente encontrada na fila." -ForegroundColor Yellow
-        Write-Log "Fila vazia. Encerrando."
+        Write-Host "`nNenhuma solicitação pendente encontrada na fila." -ForegroundColor Yellow
+        Write-Log "Fila vazia."
         exit
     }
     
