@@ -5,9 +5,15 @@ Ferramenta desenvolvida em PowerShell com interface gráfica (Windows Forms) par
 
 O sistema integra-se com uma planilha Google Sheets (via Apps Script API) para buscar demandas de resets pendentes e auditar as ações executadas.
  
- ## URL de Acesso (Produção)
- **Link Fixo:** [Acessar Ferramenta Web](https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec)
- *Use este link para acessar a interface web e para atualizações futuras.*
+ ## URLs de Acesso
+ 
+ ### 🟢 Produção (Estável - v1.1.0)
+ **Link Fixo:** [Acessar Produção](https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec)
+ *Use este ambiente para operações críticas do dia-a-dia.*
+ 
+ ### 🟡 Homologação (Testes - v1.3.x)
+ **Link Teste:** [Acessar Homologação](https://script.google.com/macros/s/AKfycbzCoQtXujp00oKj_JKy556ma23EmlL9cRaVIfc45Avi7SSrV1p56flSecxbuhx6ko1JQ/exec)
+ *Ambiente para validação de novas features (Desbloqueio, Fila Única).*
 
 > [!IMPORTANT]
 > **DEPLOYMENT VIA CLASP:**
@@ -92,8 +98,17 @@ clasp deploy -i <DEPLOYMENT_ID> -d "Descrição"
 
 ## Histórico de Versões
 
-### v1.1.0 (Atual)
-- [Mirror] **Espelho de Acesso**: Nova aba para clonar grupos de um usuário modelo para múltiplos destinos.
+### v1.3.x (Em Homologação - Evolução da v1.1.0)
+- [Feature] **Fila Única**: Backend unificado para aceitar diferentes tipos de solicitações na mesma planilha "Solicitações".
+- [Feature] **Desbloqueio de Conta**: Nova opção no Frontend ("Ação: Desbloquear Conta") que envia uma task do tipo `UNLOCK` para o Daemon.
+- [Daemon] Suporte nativo ao tipo `UNLOCK`/`DESBLOQUEIO_CONTA` sem necessidade de resetar senha.
+- [UI] Seletor de ação (Reset/Unlock) integrado ao rodapé sem alterar o layout original.
+- [Fix] Correção de sintaxe no template Vue.js (quebra de linha inválida).
+- [Fix] Criação de ambiente dedicado de Homologação separado da Produção.
+
+### v1.1.0 (Versão Estável Atual - Rollback)
+- **STATUS:** Esta versão foi restaurada como a oficial de produção após testes na v1.2/1.3.
+- [Mirror] **Espelho de Acesso**: Nova aba para clonar grupos de um usuário modelo.
 - [Daemon] Envio de grupos via string separada por `;` para compatibilidade total com Excel/Sheets.
 - [Backend] Adicionado `SpreadsheetApp.flush()` para evitar condições de corrida (Race Conditions).
 - [Fix] Mapeamento de campo `groups` / `grupos` unificado para evitar bugs de retorno do Daemon.
