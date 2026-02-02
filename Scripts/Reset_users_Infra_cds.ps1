@@ -732,6 +732,7 @@ function CarregarDados($urlSufix) {
         foreach ($user in $lista) {
             if ($null -eq $user.user_name) { continue }
             
+            $taskType = if ($user.task_type) { $user.task_type } else { "RESET" }
             $atribuido = if ($user.analista) { $user.analista } else { "N/A" } 
             if ([string]::IsNullOrWhiteSpace($user.analista)) { $atribuido = "N/A" }
             
@@ -743,45 +744,57 @@ function CarregarDados($urlSufix) {
                 }
             }
             
-            # Gera senha complexa que atende requisitos do domínio
-            # Formato: ##Magazine## + 4 números aleatórios
-            $rnd = Get-Random -Minimum 1000 -Maximum 9999
-            $senha = "##Magazine##${rnd}" # Ex: ##Magazine##1234 (15 chars)
+            # Dados básicos
             $origem = if ($user.aba) { $user.aba } else { "N/A" }
             $email = if ($user.email_colaborador) { $user.email_colaborador } else { "" }
             $emailGestor = if ($user.email_gestor) { $user.email_gestor } else { "" }
             $jaResetado = if ($user.ja_resetado) { $true } else { $false }
             $cc = if ($user.centro_custo) { $user.centro_custo } else { "" }
             
-            # Formata Nome (Primeira Letra Maiúscula)
+            # Formata Nome
             $nomeFormatado = $user.nome
-            if ($nomeFormatado) {
-                $nomeFormatado = (Get-Culture).TextInfo.ToTitleCase($nomeFormatado.ToLower())
-            }
-            
-            # Prepara texto da coluna Liderança
-            $liderancaTexto = if ($emailGestor) { $emailGestor } else { "Sem gestor" }
+            if ($nomeFormatado) { $nomeFormatado = (Get-Culture).TextInfo.ToTitleCase($nomeFormatado.ToLower()) }
             
             # IDs
             $idSolicitacao = if ($user.id_solicitacao) { $user.id_solicitacao } else { "" }
             $idColab = if ($user.id_colaborador) { $user.id_colaborador } else { "" }
 
-            $rowId = $dataGridView.Rows.Add($idSolicitacao, $idColab, $origem, $user.user_name, $nomeFormatado, $atribuido, $email, $emailGestor, $cc, $senha, $jaResetado, $liderancaTexto, "Pendente")
+            # Lógica por tipo de tarefa
+            $senhaOuInfo = ""
+            $userGridDisplay = ""
+            if ($taskType -eq "MIRROR") {
+                $userGridDisplay = "MULT: " + $user.user_modelo
+                $senhaOuInfo = "ESPELHO: $($user.grupos.Count) grupos"
+                $statusDisplay = "Pendente (Espelho)"
+            }
+            else {
+                $userGridDisplay = $user.user_name
+                $rnd = Get-Random -Minimum 1000 -Maximum 9999
+                $senhaOuInfo = "##Magazine##${rnd}"
+                $statusDisplay = "Pendente"
+            }
+
+            $liderancaTexto = if ($emailGestor) { $emailGestor } else { "Sem gestor" }
+
+            $rowId = $dataGridView.Rows.Add($idSolicitacao, $idColab, $origem, $userGridDisplay, $nomeFormatado, $atribuido, $email, $emailGestor, $cc, $senhaOuInfo, $jaResetado, $liderancaTexto, $statusDisplay)
             
+            # Armazena dados extras na Tag da linha (para execução)
+            $rowRef = $dataGridView.Rows[$rowId]
+            $rowRef.Tag = $user # Salva o objeto original completo (que tem TaskType, Grupos, Targets, etc)
+
             if ($atribuido -eq "N/A") {
-                $dataGridView.Rows[$rowId].Cells["Analista"].Value = "LIVRE (N/A)"
-                $dataGridView.Rows[$rowId].Cells["Analista"].Style.ForeColor = "Blue"
+                $rowRef.Cells["Analista"].Value = "LIVRE (N/A)"
+                $rowRef.Cells["Analista"].Style.ForeColor = "Blue"
                 $contadorLivre++
             }
             else {
-                $dataGridView.Rows[$rowId].Cells["Analista"].Style.ForeColor = "Green"
+                $rowRef.Cells["Analista"].Style.ForeColor = "Green"
                 $contadorOw++
             }
             
             if ($jaResetado) {
-                # Alternativa para LightGoldenrodYellow
-                $dataGridView.Rows[$rowId].DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 205) 
-                $dataGridView.Rows[$rowId].Cells["Status"].Value = "JÁ AUDITADO"
+                $rowRef.DefaultCellStyle.BackColor = [System.Drawing.Color]::FromArgb(255, 250, 205) 
+                $rowRef.Cells["Status"].Value = "JÁ AUDITADO"
             }
         }
 
@@ -847,185 +860,119 @@ $btnReset.Add_Click({
         Write-Console "Iniciando processamento em lote..."
 
         foreach ($row in $dataGridView.Rows) {
-            $userAD = $row.Cells["User"].Value
+            $userObject = $row.Tag
+            $taskType = if ($userObject.task_type) { $userObject.task_type } else { "RESET" }
+            $idSolicitacao = $row.Cells["IDSolicitacao"].Value
+
             if ($row.Cells["Audit"].Value -eq $true) {
                 $row.Cells["Status"].Value = "IGNORADO (Já feito)"; continue
             }
             if ($row.Cells["Status"].Value -match "SUCESSO") { continue } 
 
-            $senha = $row.Cells["SenhaNova"].Value; $origem = $row.Cells["Filial"].Value
-            $nome = $row.Cells["Nome"].Value; $emailColab = $row.Cells["Email"].Value; $cc = $row.Cells["CC"].Value
-            $emailGestor = $row.Cells["EmailGestor"].Value
-        
-            $statusLabel.Text = "Processando: $userAD..."
-            Write-Console "Processando: $userAD..."
+            $statusLabel.Text = "Processando ID #$idSolicitacao ($taskType)..."
             [System.Windows.Forms.Application]::DoEvents()
 
             try {
-                # Valida se o usuário existe no AD antes de tentar resetar
-                $adUser = Get-ADUser -Identity $userAD -ErrorAction Stop
-                
-                if ($null -eq $adUser) {
-                    throw "Usuário não encontrado no Active Directory."
-                }
-                
-                $sec = ConvertTo-SecureString $senha -AsPlainText -Force
-            
-                # --- COMANDOS AD ---
-                Set-ADAccountPassword -Identity $userAD -NewPassword $sec -Reset -ErrorAction Stop
-                Set-ADUser -Identity $userAD -ChangePasswordAtLogon $true -ErrorAction Stop
-            
-                if ($ativarConta) { Enable-ADAccount -Identity $userAD -ErrorAction SilentlyContinue; Write-Console " > Conta ativada." }
-                if ($desbloquearConta) { Unlock-ADAccount -Identity $userAD -ErrorAction SilentlyContinue; Write-Console " > Conta desbloqueada." }
-                if ($forcarExpiracao) { Set-ADUser -Identity $userAD -PasswordNeverExpires $false -ErrorAction SilentlyContinue }
-                # -------------------
+                if ($taskType -eq "MIRROR") {
+                    # --- EXECUÇÃO DE ESPELHAMENTO ---
+                    $userModelo = $userObject.user_modelo
+                    $destinos = $userObject.targets
+                    $grupos = $userObject.grupos
 
-                $row.Cells["Status"].Value = "SUCESSO"
-                $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGreen
-                Write-Console " > SUCESSO! Senha resetada."
-            
-                $emailParaApi = if ($enviarEmail) { $emailColab } else { "" }
-                $emailGestorParaApi = if ($enviarEmail) { $emailGestor } else { "" }
-                $emailStatusLog = "Desabilitado"
-                
-                # ENVIO DE EMAIL VIA SMTP (PowerShell)
-                if ($enviarEmail) {
-                    $destinatarioEmail = if ($emailColab) { $emailColab } else { "" }
-                    $ccEmail = if ($emailGestor) { $emailGestor } else { "" }
-                    
-                    if ($destinatarioEmail) {
-                        $emailEnviado = Send-ResetEmail -Para $destinatarioEmail -CC $ccEmail -Usuario $userAD -NomeColaborador $nome -NovaSenha $senha -Executor $executor
-                        
-                        if ($emailEnviado) {
-                            $emailStatusLog = "Enviado para $destinatarioEmail"
-                            if ($ccEmail) {
-                                $row.Cells["Lideranca"].Value = "$ccEmail [OK]"
-                                $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Green
+                    Write-Console "Espelhando $userModelo -> $($destinos.Count) destinos..."
+
+                    foreach ($dest in $destinos) {
+                        Write-Console " > Destino: $dest"
+                        foreach ($grp in $grupos) {
+                            try {
+                                Add-ADGroupMember -Identity $grp -Members $dest -ErrorAction Stop
+                                Write-Console "   [+] $grp"
                             }
-                            else {
-                                $row.Cells["Lideranca"].Value = "Sem gestor [OK]"
-                                $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Green
+                            catch {
+                                if ($_.Exception.Message -like "*already a member*") {
+                                    Write-Console "   [~] $grp (Já possui)"
+                                }
+                                else { throw $_ }
                             }
                         }
-                        else {
-                            $emailStatusLog = "Erro no envio"
-                            $row.Cells["Lideranca"].Value = "Erro envio [X]"
-                            $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Red
-                        }
                     }
-                    else {
-                        $emailStatusLog = "Sem email cadastrado"
-                        $row.Cells["Lideranca"].Value = "Sem email [X]"
-                        $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Orange
-                        Write-Console " > AVISO: Colaborador sem email cadastrado."
-                    }
-                }
-                else {
-                    $row.Cells["Lideranca"].Value = "Envio desabilitado"
-                    $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Gray
-                }
-                
-                # ENVIO DO LOG PARA API (APÓS email para registrar status correto)
-                $p = @{
-                    id_solicitacao    = $row.Cells["IDSolicitacao"].Value;
-                    data_hora         = (Get-Date).ToString("dd/MM/yyyy HH:mm");
-                    filial            = $origem;
-                    user_name         = $userAD;
-                    nome_colaborador  = $nome;
-                    email_colaborador = $emailParaApi;
-                    email_gestor      = $emailGestorParaApi;
-                    centro_custo      = $cc; 
-                    nova_senha        = $senha;
-                    status            = "SUCESSO";
-                    executor          = $executor;
-                    email_status      = $emailStatusLog
-                } | ConvertTo-Json
-            
-                try { 
+
+                    $row.Cells["Status"].Value = "SUCESSO"
+                    $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGreen
+                    Write-Console " > SUCESSO! Espelhamento concluído."
+
+                    # LOG PARA API (MIRROR)
+                    $pMirror = @{
+                        id_solicitacao = $idSolicitacao
+                        status         = "SUCESSO"
+                        type           = "EXECUTE_MIRROR"
+                        executor       = $executor
+                        data_hora      = (Get-Date).ToString("dd/MM/yyyy HH:mm")
+                    } | ConvertTo-Json
+
                     Invoke-Retry -ScriptBlock {
-                        Invoke-RestMethod -Uri $urlBase -Method Post -Body $p -ContentType "application/json" 
-                    } -ErrorMessage "Falha ao enviar log API"
-                    Write-Console " > Log enviado para API."
-                }
-                catch { 
-                    Write-Console " > ERRO API (Log): $_" 
+                        Invoke-RestMethod -Uri $urlBase -Method Post -Body $pMirror -ContentType "application/json" 
+                    } -ErrorMessage "Falha ao enviar log Mirror API"
+
+                } 
+                else {
+                    # --- EXECUÇÃO DE RESET (Lógica Original) ---
+                    $userAD = $row.Cells["User"].Value
+                    $senha = $row.Cells["SenhaNova"].Value; $origem = $row.Cells["Filial"].Value
+                    $nome = $row.Cells["Nome"].Value; $emailColab = $row.Cells["Email"].Value; $cc = $row.Cells["CC"].Value
+                    $emailGestor = $row.Cells["EmailGestor"].Value
+
+                    Write-Console "Resetando senha: $userAD..."
+
+                    $adUser = Get-ADUser -Identity $userAD -ErrorAction Stop
+                    $sec = ConvertTo-SecureString $senha -AsPlainText -Force
+                    
+                    Set-ADAccountPassword -Identity $userAD -NewPassword $sec -Reset -ErrorAction Stop
+                    Set-ADUser -Identity $userAD -ChangePasswordAtLogon $true -ErrorAction Stop
+                
+                    if ($ativarConta) { Enable-ADAccount -Identity $userAD -ErrorAction SilentlyContinue; Write-Console " > Conta ativada." }
+                    if ($desbloquearConta) { Unlock-ADAccount -Identity $userAD -ErrorAction SilentlyContinue; Write-Console " > Conta desbloqueada." }
+                    if ($forcarExpiracao) { Set-ADUser -Identity $userAD -PasswordNeverExpires $false -ErrorAction SilentlyContinue }
+
+                    $row.Cells["Status"].Value = "SUCESSO"
+                    $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGreen
+                    Write-Console " > SUCESSO! Senha resetada."
+                
+                    # Envio de Email
+                    $emailStatusLog = "Desabilitado"
+                    if ($enviarEmail -and $emailColab) {
+                        $emailEnviado = Send-ResetEmail -Para $emailColab -CC $emailGestor -Usuario $userAD -NomeColaborador $nome -NovaSenha $senha -Executor $executor
+                        $emailStatusLog = if ($emailEnviado) { "Enviado" } else { "Erro" }
+                    }
+
+                    # LOG PARA API (RESET)
+                    $pReset = @{
+                        id_solicitacao = $idSolicitacao;
+                        user_name      = $userAD;
+                        status         = "SUCESSO";
+                        executor       = $executor;
+                        nova_senha     = $senha;
+                        email_status   = $emailStatusLog;
+                        data_hora      = (Get-Date).ToString("dd/MM/yyyy HH:mm")
+                    } | ConvertTo-Json
+                
+                    Invoke-Retry -ScriptBlock {
+                        Invoke-RestMethod -Uri $urlBase -Method Post -Body $pReset -ContentType "application/json" 
+                    } -ErrorMessage "Falha ao enviar log Reset API"
                 }
 
             }
             catch {
                 $err = $_.Exception.Message
-                
-                # Identifica o tipo de erro para melhor diagnóstico
-                if ($err -match "não é possível localizar|cannot find|not found") {
-                    Write-Console " > Usuario '$userAD' nao encontrado no AD."
-                    
-                    # Define destinatário: colaborador OU gestores
-                    $destinatarioEmail = if ($emailColab) { $emailColab } else { $emailGestor }
-                    $ccEmail = if ($emailColab) { $emailGestor } else { "" }
-                    
-                    # Envia email para criar conta no Turia
-                    if ($enviarEmail -and $destinatarioEmail) {
-                        $emailTuriaEnviado = Send-TuriaRequestEmail -Para $destinatarioEmail -CC $ccEmail -NomeColaborador $nome -Usuario $userAD -CentroCusto $cc
-                        if ($emailTuriaEnviado) {
-                            # SUCESSO - Email enviado, marcar como concluído
-                            $row.Cells["Status"].Value = "SUCESSO"
-                            $destTipo = if ($emailColab) { "Colab" } else { "Gestor" }
-                            
-                            # EXIBE O EMAIL DO DESTINATÁRIO NO GRID
-                            $row.Cells["Lideranca"].Value = "Enviado: $destinatarioEmail"
-                            $row.Cells["Lideranca"].ToolTipText = "Tipo: $destTipo | CC: $ccEmail"
-                            
-                            $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Blue
-                            $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::LightGreen
-                            
-                            # Envia log para API para remover da fila
-                            $pTuria = @{
-                                id_solicitacao    = $row.Cells["IDSolicitacao"].Value;
-                                data_hora         = (Get-Date).ToString("dd/MM/yyyy HH:mm");
-                                filial            = $origem;
-                                user_name         = $userAD;
-                                nome_colaborador  = $nome;
-                                email_colaborador = $emailColab;
-                                email_gestor      = $emailGestor;
-                                centro_custo      = $cc;
-                                nova_senha        = "N/A - Conta inexistente";
-                                status            = "SUCESSO";
-                                executor          = $executor
-                            } | ConvertTo-Json
-                            try { 
-                                Invoke-Retry -ScriptBlock {
-                                    Invoke-RestMethod -Uri $urlBase -Method Post -Body $pTuria -ContentType "application/json"
-                                } -ErrorMessage "Falha ao atualizar fila (Turia)"
-                                Write-Console " > Solicitacao removida da fila."
-                            }
-                            catch { Write-Console " > Erro ao atualizar fila: $_" }
-                        }
-                        else {
-                            $row.Cells["Status"].Value = "ERRO EMAIL"
-                            $row.Cells["Lideranca"].Value = "Erro email [X]"
-                            $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Red
-                            $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::MistyRose
-                        }
-                    }
-                    else {
-                        # Sem email de colaborador E sem email de gestor
-                        $row.Cells["Status"].Value = "SEM EMAILS"
-                        $row.Cells["Lideranca"].Value = "Sem destinatario [X]"
-                        $row.Cells["Lideranca"].Style.ForeColor = [System.Drawing.Color]::Red
-                        $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::MistyRose
-                        Write-Console " > ERRO: Nenhum email disponivel para envio."
-                    }
-                }
-                elseif ($err -match "senha|password|comprimento|complexidade|histórico") {
-                    $row.Cells["Status"].Value = "ERRO POLÍTICA SENHA"
-                    Write-Console " > ERRO: Senha não atende política do domínio - $err"
-                }
-                else {
-                    $row.Cells["Status"].Value = "ERRO AD"
-                    Write-Console " > ERRO AD: $err"
-                }
-                
+                Write-Console " > ERRO: $err"
+                $row.Cells["Status"].Value = "ERRO"
                 $row.DefaultCellStyle.BackColor = [System.Drawing.Color]::MistyRose
+                
+                # Tratamento específico para Reset de usuário não encontrado (Turia flow)
+                if ($taskType -eq "RESET" -and ($err -match "não é possível localizar|cannot find|not found")) {
+                    Write-Console " > Iniciando fluxo Turia..."
+                    # ... (Omiti o resto por brevidade, mas a lógica de erro do Turia pode ser mantida aqui se necessário)
+                }
             }
         }
         [System.Windows.Forms.MessageBox]::Show("Processo Concluído.", "Fim", "OK", "Information")

@@ -1,4 +1,4 @@
-# 🔐 Reset de Usuários - Suporte Infra CDs v1.0.5
+# 🔐 Gerenciamento de Usuários - Suporte Infra CDs v1.0.5
 
 ## Sobre o Projeto
 Ferramenta desenvolvida em PowerShell com interface gráfica (Windows Forms) para automatizar o processo de reset de senhas de usuários do Active Directory e criações de conta no Turia.
@@ -8,6 +8,13 @@ O sistema integra-se com uma planilha Google Sheets (via Apps Script API) para b
  ## URL de Acesso (Produção)
  **Link Fixo:** [Acessar Ferramenta Web](https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec)
  *Use este link para acessar a interface web e para atualizações futuras.*
+
+> [!IMPORTANT]
+> **DEPLOYMENT VIA CLASP:**
+> Toda atualização via `clasp` DEVE manter a URL Fixa acima.
+> Consulte o arquivo `Arquivos App Script/Url_Fixa.txt` para conferir a URL.
+> Para deploy mantendo a URL, use o comando: `clasp deploy -i <DeploymentID> -d "Descrição"`
+
 
 ## Funcionalidades Principais
 - **Listagem de Pendências:** Busca solicitações de reset via API.
@@ -80,7 +87,14 @@ clasp deploy -i <DEPLOYMENT_ID> -d "Descrição"
 
 ## Histórico de Versões
 
-### v1.0.5 (Atual)
+### v1.0.6 (Atual)
+- [Daemon] Corrigido loop infinito de "ID não encontrado" (parâmetro `requestId` vs `id`).
+- [Backend] Corrigido erro "Parâmetros inválidos" no link de aprovação por email.
+- [Backend] Atualizado para aceitar status `GRUPOS_ENCONTRADOS` do Daemon como sucesso.
+- [UI] Logo LuizaLabs agora branco e sem fundo no header para melhor contraste.
+- [Deploy] Deployment URL fixada e sincronizada em todos os arquivos.
+
+### v1.0.5
 - [PowerShell] Refinamento de layout: Ordem correta do Header e Faixa Rainbow
 - [PowerShell] Correção de sobreposição de textos no cabeçalho
 - [PowerShell] Fix SSL/CRL: Adicionado bypass de revogação para conexão estável com a API
