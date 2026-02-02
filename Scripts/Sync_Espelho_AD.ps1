@@ -5,7 +5,7 @@
 # Requisito: RSAT Active Directory instalado e acesso à Internet.
 
 # URL da sua API (Fixa)
-$API_URL = "https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec"
+$API_URL = "https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec".Trim()
 
 $LogDir = "$PSScriptRoot\..\Logs"
 if (-not (Test-Path $LogDir)) {
