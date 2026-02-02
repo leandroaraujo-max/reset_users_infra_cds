@@ -424,7 +424,7 @@
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                     <div class="flex items-center space-x-8">
                         <div class="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity"
-                            @click="currentTab = 'new'">
+                            @click="switchTab('new')">
                             <div class="bg-white/20 p-2 rounded-lg backdrop-blur-sm">
                                 <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -441,7 +441,7 @@
                             </span>
                         </div>
                         <div class="hidden md:flex space-x-1 bg-white/10 rounded-lg p-1">
-                            <button @click="currentTab = 'new'"
+                            <button @click="switchTab('new')"
                                 :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'new', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'new'}"
                                 class="px-4 py-2 rounded-md text-sm font-medium transition-all">
                                 <span class="flex items-center">
@@ -461,7 +461,7 @@
                                 </svg>
                                 Fila de Acompanhamento
                             </button>
-                            <button @click="currentTab = 'mirror'"
+                            <button @click="switchTab('mirror')"
                                 :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'mirror', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'mirror'}"
                                 class="px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1269,8 +1269,13 @@
                 };
 
 
+                const switchTab = (tabName) => {
+                    console.log("Switching tab to:", tabName);
+                    currentTab.value = tabName;
+                };
+
                 const loadQueue = () => {
-                    currentTab.value = 'queue';
+                    switchTab('queue');
                     queueLoading.value = true;
                     google.script.run.withSuccessHandler(res => {
                         queueData.value = res;
@@ -1453,7 +1458,9 @@
                     // Novos - Filtros e Paginação da Fila
                     queueFilters, currentPage, itemsPerPage, sortColumn, sortDirection,
                     uniqueQueueFilials, uniqueQueueAnalysts, filteredQueue, paginatedQueue, totalPages,
-                    sortQueue, changePage
+                    sortQueue, changePage,
+                    // Mirror
+                    switchTab, mirrorForm, mirrorGroups, mirrorLoading, mirrorStatusMsg, fetchMirrorGroups, selectAllGroups, selectedGroupsCount, submitMirrorFinal
                 };
             }
         }).mount('#app');
