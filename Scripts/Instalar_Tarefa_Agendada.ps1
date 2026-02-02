@@ -20,8 +20,8 @@ $Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
 # Ação da Tarefa
 $Action = New-ScheduledTaskAction -Execute $PowershellPath -Argument $Arguments
 
-# Disparador (Trigger) - Iniciar agora e repetir a cada 1 minuto para sempre
-$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::MaxValue)
+# Disparador (Trigger) - Iniciar agora e repetir a cada 1 minuto para sempre (limite de 10 anos)
+$Trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Days 3650)
 
 # Configurações da Tarefa
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RunOnlyIfNetworkAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 1)
