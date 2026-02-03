@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: #ffffff;
+            max-width: 600px;
+            margin: 0 auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border-top: 6px solid #ff0000;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #0086ff, #0056b3);
+            padding: 30px;
+            text-align: center;
+            color: white;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .content {
+            padding: 40px;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .highlight {
+            color: #ff0000;
+            font-weight: bold;
+        }
+
+        .info-grid {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
+        }
+
+        .info-item {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .info-item strong {
+            width: 120px;
+            display: inline-block;
+            color: #555;
+        }
+
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #eee;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background-color: #0086ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>⚠️ Alerta de SLA</h1>
+        </div>
+        <div class="content">
+            <p>Olá, <strong>
+                    <?= analistaNome ?>
+                </strong>,</p>
+            <p>A solicitação abaixo está aguardando sua ação há mais de <span class="highlight">2 horas</span>. Este é
+                um lembrete automático para garantir o cumprimento dos prazos de atendimento.</p>
+
+            <div class="info-grid">
+                <div class="info-item"><strong>ID:</strong> #
+                    <?= idSolicitacao ?>
+                </div>
+                <div class="info-item"><strong>Tipo:</strong>
+                    <?= tipoTarefa ?>
+                </div>
+                <div class="info-item"><strong>Criada em:</strong>
+                    <?= dataCriacao ?>
+                </div>
+                <div class="info-item"><strong>Usuário:</strong>
+                    <?= usuarioNome ?>
+                </div>
+            </div>
+
+            <p>Por favor, acesse o painel de gestão para aprovar ou reprovar esta solicitação o mais breve possível.</p>
+
+            <div style="text-align: center;">
+                <a href="https://script.google.com/a/macros/luizalabs.com/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec"
+                    class="btn">Acessar Painel de Gestão</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>Este é um e-mail automático enviado pelo Sistema de Reset de Usuários.</p>
+            <p>&copy; 2026 - Suporte Infra CDs Magalog</p>
+        </div>
+    </div>
+</body>
+
+</html>

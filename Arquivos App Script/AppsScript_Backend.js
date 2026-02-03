@@ -444,11 +444,12 @@ function submitResetQueue(requestData) {
 
     if (!queueSheet) {
         queueSheet = ss.insertSheet("Solicitações");
-        // SCHEMA COMPATÍVEL v1.2.1 (A-P)
-        // A:ID, B:DATA, C:FILIAL, D:USER, E:NOME, F:EMAIL, G:CC, H:ANALISTA, I:SOLICITANTE, J:PROC, K:APROV, L:TIPO, M:DETALHES, N:MODELO, O:DESTINOS, P:GRUPOS
-        queueSheet.appendRow(["ID", "DATA_HORA", "FILIAL", "USER_NAME", "NOME", "EMAIL_COLAB", "CENTRO_CUSTO", "ANALISTA_RESPONSAVEL", "SOLICITANTE", "STATUS_PROCESSAMENTO", "STATUS_APROVACAO", "TIPO_TAREFA", "DETALHES_ADICIONAIS", "MODELO", "DESTINOS", "GRUPOS"]);
+        // SCHEMA v1.3.0 (A-Q)
+        // A:ID, B:DATA, C:FILIAL, D:USER, E:NOME, F:EMAIL, G:CC, H:ANALISTA, I:SOLICITANTE, J:PROC, K:APROV, L:TIPO, M:DETALHES, N:MODELO, O:DESTINOS, P:GRUPOS, Q:SLA
+        queueSheet.appendRow(["ID", "DATA_HORA", "FILIAL", "USER_NAME", "NOME", "EMAIL_COLAB", "CENTRO_CUSTO", "ANALISTA_RESPONSAVEL", "SOLICITANTE", "STATUS_PROCESSAMENTO", "STATUS_APROVACAO", "TIPO_TAREFA", "DETALHES_ADICIONAIS", "MODELO", "DESTINOS", "GRUPOS", "ULTIMO_LEMBRETE"]);
         queueSheet.setTabColor("Blue");
-        queueSheet.getRange(1, 1, 1, 16).setFontWeight("bold").setBackground("#cfe2f3");
+        queueSheet.getRange(1, 1, 1, 17).setFontWeight("bold").setBackground("#cfe2f3");
+        queueSheet.setFrozenRows(1);
     }
 
     const timestamp = new Date();
@@ -469,15 +470,16 @@ function submitResetQueue(requestData) {
             u.nome,                         // E (4)
             u.email,                        // F (5)
             u.centro_custo,                 // G (6)
-            finalAnalystEmail,              // H (7) - ANALISTA (ORIGINAL)
-            requesterEmail,                 // I (8) - SOLICITANTE (ORIGINAL)
+            finalAnalystEmail,              // H (7) - ANALISTA
+            requesterEmail,                 // I (8) - SOLICITANTE
             "PENDENTE",                     // J (9) - STATUS_PROC
             "PENDENTE",                     // K (10) - STATUS_APROV
             requestData.task_type || "RESET", // L (11) - TIPO
             "",                             // M (12) - DETALHES
             "",                             // N (13) - MODELO
             "",                             // O (14) - DESTINOS
-            ""                              // P (15) - GRUPOS
+            "",                             // P (15) - GRUPOS
+            ""                              // Q (16) - ULTIMO_LEMBRETE
         ]);
 
         const emailType = requestData.task_type === "DESBLOQUEIO_CONTA" ? "DESBLOQUEIO" : "RESET";
@@ -858,7 +860,8 @@ function submitMirrorExecution(data) {
         "",                 // M (12) - DETALHES
         modelUser,          // N (13) - MODELO
         JSON.stringify(targets), // O (14) - DESTINOS
-        JSON.stringify(groups)   // P (15) - GRUPOS
+        JSON.stringify(groups),  // P (15) - GRUPOS
+        ""                       // Q (16) - ULTIMO_LEMBRETE
     ]);
 
     // Enviar Notificação de Aprovação
@@ -1334,4 +1337,95 @@ function generatePassword() {
     return password;
 }
 
+/**
+ * SISTEMA DE SLA (v1.3.0)
+ * Monitora e envia lembretes a cada 1h para itens pendentes há > 2h.
+ * Os lembretes param automaticamente quando o status deixa de ser 'PENDENTE'.
+ */
+function runSLACheck() {
+    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const sheet = ss.getSheetByName("Solicitações");
+    if (!sheet) return;
 
+    ensureHeaders(sheet);
+    const data = sheet.getDataRange().getValues();
+    const now = new Date();
+    const TWO_HOURS = 2 * 60 * 60 * 1000;
+    const ONE_HOUR = 1 * 60 * 60 * 1000;
+
+    for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const createdAt = row[1]; // Col B (Index 1)
+        const anaEmail = row[7];  // Col H (Index 7)
+        const statusAprov = String(row[10] || "").toUpperCase().trim(); // Col K (Index 10)
+        const id = row[0];
+        const tipo = row[11]; // Col L (Index 11)
+        const usuarioNome = row[4]; // Col E (Index 4)
+        const ultimoLembrete = row[16]; // Col Q (Index 16)
+
+        // FILTRO CRÍTICO: Somente PENDENTE e criadas há mais de 2 horas
+        if (statusAprov === "PENDENTE" && (createdAt instanceof Date) && (now - createdAt) > TWO_HOURS) {
+
+            let deveNotificar = false;
+            if (!ultimoLembrete || !(ultimoLembrete instanceof Date)) {
+                deveNotificar = true; // Primeiro lembrete
+            } else if ((now - ultimoLembrete) >= ONE_HOUR) {
+                deveNotificar = true; // Lembrete recorrente
+            }
+
+            if (deveNotificar && anaEmail && anaEmail.includes("@")) {
+                try {
+                    const template = HtmlService.createTemplateFromFile('AppsScript_SLA_Template');
+                    template.analistaNome = anaEmail.split('.')[0].toUpperCase();
+                    template.idSolicitacao = id;
+                    template.tipoTarefa = tipo;
+                    template.dataCriacao = createdAt.toLocaleString();
+                    template.usuarioNome = usuarioNome;
+
+                    const htmlBody = template.evaluate().getContent();
+
+                    GmailApp.sendEmail(anaEmail, "⚠️ ALERTA DE SLA: Solicitação #" + id + " pendente", "", {
+                        htmlBody: htmlBody,
+                        name: "Suporte Infra (Alerta SLA)"
+                    });
+
+                    // Registra timestamp do envio para controle de recorrência - Col Q (Index 17 para o Sheets)
+                    sheet.getRange(i + 1, 17).setValue(now);
+                    console.log("SLA: Lembrete enviado para " + anaEmail + " (ID #" + id + ")");
+                } catch (e) {
+                    console.error("Erro SLA p/ " + anaEmail + ": " + e);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Cria o trigger horário se ele não existir
+ */
+function setupSLATrigger() {
+    const fn = "runSLACheck";
+    const triggers = ScriptApp.getProjectTriggers();
+    if (!triggers.some(t => t.getHandlerFunction() === fn)) {
+        ScriptApp.newTrigger(fn).timeBased().everyHours(1).create();
+        console.log("Trigger de SLA configurado.");
+    }
+}
+
+function ensureHeaders(sheet) {
+    const expected = ["ID", "DATA_HORA", "FILIAL", "USER_NAME", "NOME", "EMAIL_COLAB", "CENTRO_CUSTO", "ANALISTA_RESPONSAVEL", "SOLICITANTE", "STATUS_PROCESSAMENTO", "STATUS_APROVACAO", "TIPO_TAREFA", "DETALHES_ADICIONAIS", "MODELO", "DESTINOS", "GRUPOS", "ULTIMO_LEMBRETE"];
+    const currentHeaders = sheet.getRange(1, 1, 1, expected.length).getValues()[0];
+
+    let needsUpdate = false;
+    for (let i = 0; i < expected.length; i++) {
+        if (String(currentHeaders[i] || "").trim() !== expected[i]) {
+            needsUpdate = true;
+            break;
+        }
+    }
+
+    if (needsUpdate) {
+        sheet.getRange(1, 1, 1, expected.length).setValues([expected]).setFontWeight("bold").setBackground("#cfe2f3");
+        sheet.setFrozenRows(1);
+    }
+}
