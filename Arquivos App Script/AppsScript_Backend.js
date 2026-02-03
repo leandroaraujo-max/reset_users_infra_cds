@@ -903,27 +903,51 @@ function sendApprovalEmail(analystName, requestId, type, info1, info2) {
             to: emailAnalista,
             subject: subject,
             htmlBody: `
-                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 600px;">
-                    <h2 style="color: #1e40af;">Validação de Solicitação Técnica</h2>
-                    <p>Olá <strong>${analystName}</strong>,</p>
-                    <p>Uma nova solicitação requer sua <strong>APROVAÇÃO</strong> manual antes de ser executada.</p>
-                    
-                    <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                         ${detailHtml}
-                    </div>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        @media only screen and (max-width: 480px) {
+                            .container { padding: 15px !important; margin: 10px !important; width: auto !important; }
+                            .btn-container { text-align: center !important; }
+                            .btn { 
+                                display: block !important; 
+                                width: 100% !important; 
+                                margin: 10px 0 !important; 
+                                padding: 15px 0 !important; 
+                                text-align: center !important;
+                                box-sizing: border-box !important;
+                            }
+                        }
+                    </style>
+                </head>
+                <body style="margin: 0; padding: 0; background-color: #f9fafb;">
+                    <div class="container" style="font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; border: 1px solid #e5e7eb; border-radius: 12px; max-width: 600px; margin: 40px auto; background-color: #ffffff; shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                        <h2 style="color: #1e40af; margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 10px;">Validação de Solicitação Técnica</h2>
+                        <p style="color: #374151; font-size: 16px;">Olá <strong>${analystName}</strong>,</p>
+                        <p style="color: #4b5563; font-size: 14px; line-height: 1.5;">Uma nova solicitação requer sua <strong>APROVAÇÃO</strong> manual antes de ser executada pelo Agente AD.</p>
+                        
+                        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e5e7eb;">
+                             ${detailHtml}
+                        </div>
 
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="${linkApprove}" style="background-color: #16a34a; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-right: 20px;">
-                            ✅ APROVAR EXECUÇÃO
-                        </a>
-                        <a href="${linkReject}" style="background-color: #dc2626; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                            🚫 REPROVAR
-                        </a>
+                        <div class="btn-container" style="text-align: center; margin-top: 35px;">
+                            <a href="${linkApprove}" class="btn" style="background-color: #16a34a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin: 5px; min-width: 160px; font-size: 14px; letter-spacing: 0.5px;">
+                                ✅ APROVAR
+                            </a>
+                            <a href="${linkReject}" class="btn" style="background-color: #dc2626; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; margin: 5px; min-width: 160px; font-size: 14px; letter-spacing: 0.5px;">
+                                🚫 REPROVAR
+                            </a>
+                        </div>
+                        
+                        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; color: #9ca3af; font-size: 12px; text-align: center;">
+                            <p>* Ao clicar em um dos botões, sua decisão será registrada e processada.<br>
+                            Sistema de Gerenciamento de Identidades - Suporte Infra CDs</p>
+                        </div>
                     </div>
-                    <p style="margin-top: 30px; color: #555; font-size: 13px;">
-                        * Ao clicar em Aprovar, a solicitação ficará disponível para execução pelo Agente PowerShell.
-                    </p>
-                </div>
+                </body>
+                </html>
             `
         });
     } catch (e) {

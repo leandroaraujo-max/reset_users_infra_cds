@@ -1,42 +1,85 @@
 <!DOCTYPE html>
 <html>
 
-<body style="font-family: Arial; background-color: #fca;">
-    <div
-        style="padding: 0; border: 1px solid #e0e0e0; max-width: 600px; margin: auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @media only screen and (max-width: 480px) {
+            .container {
+                padding: 0 !important;
+                border: none !important;
+                border-radius: 0 !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .content {
+                padding: 20px !important;
+            }
+
+            .header {
+                padding: 20px 15px !important;
+            }
+
+            .credential-box {
+                padding: 15px !important;
+                margin: 15px 0 !important;
+            }
+
+            h3 {
+                font-size: 18px !important;
+            }
+
+            p {
+                font-size: 14px !important;
+            }
+        }
+    </style>
+</head>
+
+<body style="font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f9; margin: 0; padding: 20px;">
+    <div class="container"
+        style="padding: 0; border: 1px solid #e0e0e0; max-width: 600px; margin: auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
         <!-- Cabeçalho Magalu Blue -->
-        <div style="background-color: #0086FF; padding: 25px; text-align: center;">
-            <h2
-                style="color: white; margin: 0; font-family: 'Open Sans', 'Helvetica Neue', Arial, sans-serif; font-weight: 700; letter-spacing: -0.5px;">
+        <div class="header" style="background-color: #0086FF; padding: 30px; text-align: center;">
+            <h2 style="color: white; margin: 0; font-weight: 700; letter-spacing: -0.5px; font-size: 24px;">
                 Magalu</h2>
-            <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">Suporte Infra CDs</p>
+            <p
+                style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">
+                Suporte Infra CDs</p>
         </div>
 
         <!-- Faixa Rainbow (Identidade Visual) -->
         <div
-            style="height: 4px; background: linear-gradient(90deg, #FFCD00 0%, #FF9900 14%, #FF0000 28%, #FF0099 42%, #9900FF 57%, #0000FF 71%, #0099FF 85%, #00FF00 100%);">
+            style="height: 5px; background: linear-gradient(90deg, #FFCD00 0%, #FF9900 14%, #FF0000 28%, #FF0099 42%, #9900FF 57%, #0000FF 71%, #0099FF 85%, #00FF00 100%);">
         </div>
 
         <!-- Conteúdo -->
-        <div style="padding: 30px 40px;">
-            <h3 style="color: #333; margin-top: 0; font-weight: 600;">Senha Resetada com Sucesso</h3>
-            <p style="color: #555; font-size: 16px; line-height: 1.5;">Olá <strong>{PRIMEIRO_NOME}</strong>,</p>
-            <p style="color: #555; font-size: 16px; line-height: 1.5;">Sua senha de rede foi redefinida automaticamente
-                conforme solicitação.</p>
+        <div class="content" style="padding: 40px;">
+            <h3 style="color: #1f2937; margin-top: 0; font-weight: 700; font-size: 20px;">Senha Resetada com Sucesso
+            </h3>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">Olá <strong>{PRIMEIRO_NOME}</strong>,</p>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">Sua senha de rede foi redefinida
+                automaticamente
+                conforme solicitação de suporte técnico.</p>
 
             <!-- Box de Credenciais -->
-            <div
-                style="background: #f8f9fa; padding: 20px; border-left: 5px solid #0086FF; margin: 25px 0; border-radius: 4px;">
-                <p style="margin: 5px 0; color: #333;"><strong>Usuário:</strong> <span
-                        style="font-family: monospace; font-size: 1.1em;">{USUARIO}</span></p>
-                <p style="margin: 5px 0; color: #333;"><strong>Nova Senha:</strong> <span
-                        style="font-family: monospace; font-size: 1.2em; background: #e9ecef; padding: 2px 6px; border-radius: 4px; color: #0086FF;">{NOVA_SENHA}</span>
+            <div class="credential-box"
+                style="background: #f9fafb; padding: 25px; border-left: 6px solid #0086FF; margin: 30px 0; border-radius: 8px; border-top: 1px solid #f3f4f6; border-right: 1px solid #f3f4f6; border-bottom: 1px solid #f3f4f6;">
+                <p style="margin: 0 0 15px 0; color: #374151; font-size: 14px;"><strong>USUÁRIO:</strong><br>
+                    <span
+                        style="font-family: 'Courier New', monospace; font-size: 18px; color: #111827; font-weight: bold;">{USUARIO}</span>
+                </p>
+                <p style="margin: 0; color: #374151; font-size: 14px;"><strong>NOVA SENHA:</strong><br>
+                    <span
+                        style="font-family: 'Courier New', monospace; font-size: 20px; background: #eff6ff; padding: 4px 10px; border-radius: 6px; color: #2563eb; font-weight: bold; border: 1px solid #dbeafe;">{NOVA_SENHA}</span>
                 </p>
             </div>
 
-            <p style="font-size: 14px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-                Por favor, altere sua senha no primeiro acesso.<br>
-                Este é um e-mail automático, não responda.
+            <p
+                style="font-size: 13px; color: #6b7280; margin-top: 35px; border-top: 1px solid #f3f4f6; padding-top: 25px; line-height: 1.5;">
+                🔔 <strong>Importante:</strong> Altere sua senha no primeiro acesso à rede.<br>
+                Este é um e-mail automático gerado pelo sistema de suporte. Por favor, não responda.
             </p>
         </div>
     </div>

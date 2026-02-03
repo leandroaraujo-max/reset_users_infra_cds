@@ -152,6 +152,16 @@
         .avatar-glow {
             box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
         }
+
+        /* Hide scrollbar but allow scrolling */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
     </style>
 </head>
 
@@ -216,51 +226,55 @@
 
         <div v-if="currentView === 'app'" class="flex flex-col h-full">
 
-            <header class="header-gradient text-white shadow-lg z-10 py-2 sm:py-0">
+            <header class="header-gradient text-white shadow-lg z-20 py-1 sm:py-0">
                 <div
-                    class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-wrap sm:flex-nowrap items-center justify-between gap-y-4">
-                    <div class="flex items-center space-x-8">
-                        <div class="flex items-center space-x-3 cursor-pointer hover:opacity-80 transition-opacity"
+                    class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4rem] sm:h-20 flex flex-col sm:flex-row items-center justify-between py-2 sm:py-0 gap-2">
+                    <div class="flex items-center justify-between w-full sm:w-auto">
+                        <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer hover:opacity-80 transition-opacity"
                             @click="switchTab('new')">
-                            <div class="">
-                                <img :src="appLogo" alt="LuizaLabs" class="h-8 w-auto filter brightness-0 invert">
+                            <img :src="appLogo" alt="LuizaLabs" class="h-6 sm:h-8 w-auto filter brightness-0 invert">
+                            <div class="leading-tight">
+                                <div class="font-bold text-sm sm:text-xl tracking-tight">Gerenciamento de Usuários</div>
+                                <div class="text-[10px] text-blue-200/80">Suporte Infra CDs</div>
                             </div>
-                            <span class="font-bold text-xl tracking-tight leading-none">
-                                Gerenciamento de Usuários
-                                <span
-                                    class="ml-2 text-[10px] bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded-full inline-block align-middle">v1.1.6</span>
-                                <br>
-                                <span class="text-xs font-normal text-blue-200/80">Suporte Infra CDs</span>
-                            </span>
                         </div>
-                        <div class="flex flex-wrap sm:flex-nowrap space-x-1 bg-white/10 rounded-lg p-1">
+                        <div class="flex sm:hidden items-center space-x-2">
+                            <div class="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-bold"
+                                @click="logout">
+                                {{ userInitials }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                        <div class="flex space-x-1 bg-white/10 rounded-lg p-1 min-w-max">
                             <button @click="switchTab('new')"
-                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'new', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'new'}"
-                                class="px-4 py-2 rounded-md text-sm font-medium transition-all">
+                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'new', 'text-white/80 hover:text-white': currentTab !== 'new'}"
+                                class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all">
                                 Resets
                             </button>
                             <button @click="switchTab('mirror')"
-                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'mirror', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'mirror'}"
-                                class="px-4 py-2 rounded-md text-sm font-medium transition-all">
+                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'mirror', 'text-white/80 hover:text-white': currentTab !== 'mirror'}"
+                                class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all">
                                 Espelhos
                             </button>
                             <button @click="switchTab('unlock')"
-                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'unlock', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'unlock'}"
-                                class="px-4 py-2 rounded-md text-sm font-medium transition-all">
+                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'unlock', 'text-white/80 hover:text-white': currentTab !== 'unlock'}"
+                                class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all">
                                 Desbloqueios
                             </button>
                             <button @click="loadQueue"
-                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'queue', 'text-white/80 hover:text-white hover:bg-white/10': currentTab !== 'queue'}"
-                                class="px-4 py-2 rounded-md text-sm font-medium transition-all">
-                                Fila de Acompanhamento
+                                :class="{'bg-white text-blue-700 shadow-sm': currentTab === 'queue', 'text-white/80 hover:text-white': currentTab !== 'queue'}"
+                                class="px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all">
+                                Fila
                             </button>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-4">
 
-                        <div class="text-right hidden sm:block">
-                            <div class="text-sm font-medium">{{ userEmail }}</div>
-                            <div class="text-xs text-white/60">Gestor Logado</div>
+                    <div class="hidden sm:flex items-center space-x-4">
+                        <div class="text-right">
+                            <div class="text-[11px] font-medium opacity-90 leading-none mb-1">{{ userEmail }}</div>
+                            <div class="text-[9px] text-white/60">Sessão Corporativa</div>
                         </div>
                         <div class="h-10 w-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center text-sm font-bold avatar-glow cursor-pointer hover:bg-white/30 transition-all"
                             @click="logout" title="Sair">
@@ -301,8 +315,8 @@
                                 <p class="text-sm text-gray-500 mb-6">Digite o <b>Usuário de Rede</b> de quem já possui
                                     os acessos.</p>
 
-                                <div class="flex gap-4 items-end">
-                                    <div class="flex-1 max-w-md">
+                                <div class="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
+                                    <div class="flex-1">
                                         <label
                                             class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Usuário
                                             Modelo</label>
@@ -312,8 +326,8 @@
                                     </div>
                                     <button @click="fetchMirrorGroups"
                                         :disabled="mirrorLoading || !mirrorForm.modelUser"
-                                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center">
-                                        {{ mirrorLoading ? 'Buscando no AD...' : 'Listar Grupos' }}
+                                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center">
+                                        {{ mirrorLoading ? 'Buscando...' : 'Listar Grupos' }}
                                     </button>
                                 </div>
                                 <div v-if="mirrorStatusMsg"
@@ -453,31 +467,40 @@
 
                     <!-- DESBLOQUEIO DE USUÁRIO TAB -->
                     <div v-if="currentTab === 'unlock' || currentTab === 'new'" class="space-y-6">
-                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <div class="flex flex-col md:flex-row gap-4">
-                                <div class="flex-1">
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+                            <div class="flex flex-col gap-4">
+                                <div>
                                     <label
                                         class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
                                         {{ searchLabel }}
                                     </label>
-                                    <div class="relative rounded-md shadow-sm">
-                                        <div
-                                            class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                            <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24"
-                                                stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    <div class="flex flex-col sm:flex-row gap-2">
+                                        <div class="relative flex-1">
+                                            <div
+                                                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24"
+                                                    stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                                        stroke-width="2"
+                                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </div>
+                                            <input type="text" v-model="searchQuery" @keyup.enter="performSearch"
+                                                placeholder="Busca Coringa: Nome, ID, Usuário ou Email..."
+                                                class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-9 text-sm border-gray-300 rounded-lg p-2.5 border bg-white shadow-sm">
+                                        </div>
+                                        <button @click="performSearch" :disabled="loading"
+                                            class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50 shadow-md flex items-center justify-center whitespace-nowrap">
+                                            <svg v-if="loading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                                                fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                                    stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                                </path>
                                             </svg>
-                                        </div>
-                                        <input type="text" v-model="searchQuery" @keyup.enter="performSearch"
-                                            placeholder="Busca Coringa: Nome, ID, Usuário de Rede ou Email..."
-                                            class="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-lg p-2.5 border bg-white">
-                                        <div class="absolute inset-y-0 right-0 pr-2 flex items-center">
-                                            <button @click="performSearch" :disabled="loading"
-                                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50">
-                                                {{ loading ? 'Buscando...' : 'Pesquisar Todos' }}
-                                            </button>
-                                        </div>
+                                            {{ loading ? 'Buscando...' : 'PESQUISAR' }}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -733,24 +756,25 @@
             </main>
 
             <footer v-if="currentTab === 'new' || currentTab === 'unlock'"
-                class="bg-white border-t border-gray-200 p-4 shadow-lg-up z-20">
-                <div class="max-w-7xl mx-auto flex items-center justify-between">
-                    <div class="text-sm text-gray-500">
+                class="bg-white border-t border-gray-200 p-3 sm:p-4 shadow-lg-up z-20">
+                <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="text-sm text-gray-500 order-2 sm:order-1">
                         <span v-if="selectedCount > 0" class="font-bold text-blue-600">{{ selectedCount }}</span>
                         selecionado(s).
                     </div>
-                    <div class="flex items-center space-x-4">
-                        <div class="hidden sm:block">
-                            <label class="text-xs font-semibold text-gray-500 mr-2 uppercase">Analista:</label>
+                    <div class="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto order-1 sm:order-2">
+                        <div class="w-full sm:w-auto">
+                            <label
+                                class="hidden sm:inline text-xs font-semibold text-gray-500 mr-2 uppercase">Analista:</label>
                             <select v-model="selectedAnalyst"
-                                class="text-sm border-gray-300 rounded-md border p-2 focus:ring-blue-500 bg-gray-50">
-                                <option value="" disabled>Selecione...</option>
+                                class="w-full sm:w-auto text-sm border-gray-300 rounded-md border p-2 focus:ring-blue-500 bg-gray-50">
+                                <option value="" disabled>Selecione o Analista...</option>
                                 <option v-for="a in analystList" :key="a" :value="a">{{ a }}</option>
                             </select>
                         </div>
                         <button @click="openConfirmModal"
                             :disabled="selectedCount === 0 || submitting || !selectedAnalyst"
-                            class="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition-all">
+                            class="w-full sm:w-auto bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white font-bold py-2.5 px-8 rounded-lg shadow-md transition-all">
                             {{ submitActionLabel }}
                         </button>
                     </div>
