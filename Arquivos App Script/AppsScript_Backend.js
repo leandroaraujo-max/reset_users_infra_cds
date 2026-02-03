@@ -34,6 +34,22 @@ function doGet(e) {
         if (e.parameter.mode === 'debug_full') {
             return ContentService.createTextOutput(debugSheetReader()).setMimeType(ContentService.MimeType.JSON);
         }
+        // DEBUG TEMPORARIO
+        if (e.parameter.mode === 'debug_queue') {
+            const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+            const sheet = ss.getSheetByName("Solicitações");
+            const data = sheet.getDataRange().getDisplayValues();
+            // Retorna ultimas 5 linhas para analise
+            const debugData = data.slice(-5).map(r => ({
+                id: r[0],
+                status: r[9],
+                aprov: r[10],
+                len: r.length,
+                status_raw: String(r[9]),
+                aprov_raw: String(r[10])
+            }));
+            return ContentService.createTextOutput(JSON.stringify(debugData)).setMimeType(ContentService.MimeType.JSON);
+        }
     }
 
     // 3. WEB APP (INTERFACE PADRÃO COM LOGO)
@@ -182,7 +198,7 @@ function handlePowerShellQueueRequest() {
                 let status = String(row[9]).toUpperCase().trim();          // Coluna J
                 let statusAprovacao = String(row[10]).toUpperCase().trim(); // Coluna K
 
-                if (status === "PENDENTE" && statusAprovacao === "APROVADO") {
+                if (status === "PENDENTE" && (statusAprovacao === "APROVADO" || statusAprovacao === "REPROVADO")) {
                     let filial = row[2];
                     let centroCusto = row[6];
                     let emailsLideres = [];
@@ -201,7 +217,8 @@ function handlePowerShellQueueRequest() {
                         aba: filial,
                         analista: row[7],
                         solicitante: row[8],
-                        emails_lideres: emailsLideres
+                        emails_lideres: emailsLideres,
+                        status_aprovacao: statusAprovacao
                     });
                 }
             }
@@ -217,7 +234,7 @@ function handlePowerShellQueueRequest() {
                 let status = String(mData[i][7]).toUpperCase().trim();          // Coluna H
                 let statusAprovacao = String(mData[i][9]).toUpperCase().trim(); // Coluna J
 
-                if (status === "PENDENTE_EXECUCAO" && statusAprovacao === "APROVADO") {
+                if (status === "PENDENTE_EXECUCAO" && (statusAprovacao === "APROVADO" || statusAprovacao === "REPROVADO")) {
                     usersToReset.push({
                         task_type: "MIRROR",
                         id_solicitacao: String(mData[i][0]),
@@ -228,7 +245,8 @@ function handlePowerShellQueueRequest() {
                         analista: mData[i][6],
                         aba: "ESPELHO",
                         nome: "Espelho - " + mData[i][2],
-                        user_name: "Multiplos"
+                        user_name: "Multiplos",
+                        status_aprovacao: statusAprovacao
                     });
                 }
             }
@@ -435,6 +453,11 @@ function submitResetQueue(requestData) {
     const timestamp = new Date();
     const requesterEmail = Session.getActiveUser().getEmail();
 
+    // Mapeia Analista para obter Email Corporativo Oficial
+    const analystData = mapAnalystByEmail(requesterEmail);
+    const finalAnalystEmail = analystData ? analystData.email : requesterEmail; // Fallback seguro
+    const finalAnalystName = analystData ? analystData.nome : requestData.analyst;
+
     requestData.users.forEach(u => {
         const nextId = getNextQueueId(queueSheet);
         queueSheet.appendRow([
@@ -445,18 +468,42 @@ function submitResetQueue(requestData) {
             u.nome,
             u.email,
             u.centro_custo,
-            requestData.analyst,
+            finalAnalystEmail, // Grava Email em vez de Nome
             requesterEmail,
-            "PENDENTE",                      // STATUS_PROCESSAMENTO - Col 10 (J)
-            "PENDENTE",                      // STATUS_APROVACAO - Col 11 (K)
-            requestData.task_type || "RESET"  // TIPO_TAREFA - Col 12 (L)
+            "PENDENTE",
+            "PENDENTE",
+            requestData.task_type || "RESET",
+            ""
         ]);
 
-        // Envia email de aprovação para o analista (usando o tipo real)
         const emailType = requestData.task_type === "DESBLOQUEIO_CONTA" ? "DESBLOQUEIO" : "RESET";
-        sendApprovalEmail(requestData.analyst, nextId, emailType, u.user_name, u.nome);
+        sendApprovalEmail(finalAnalystName, finalAnalystEmail, nextId, emailType, u.user_name, u.nome);
     });
     return true;
+}
+
+/**
+ * Busca dados do analista na aba 'Analistas' usando o e-mail da sessão.
+ */
+function mapAnalystByEmail(email) {
+    if (!email) return null;
+    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const sheet = ss.getSheetByName("Analistas");
+    if (!sheet) return null;
+
+    const data = sheet.getDataRange().getValues();
+    // Pula cabeçalho (i=1)
+    for (let i = 1; i < data.length; i++) {
+        // Coluna C (Index 2) é o EMAIL
+        if (String(data[i][2]).toLowerCase().trim() === String(email).toLowerCase().trim()) {
+            return {
+                nome: data[i][1], // Coluna B
+                email: data[i][2], // Coluna C
+                situacao: data[i][3] // Coluna D
+            };
+        }
+    }
+    return null;
 }
 
 /**
@@ -732,6 +779,10 @@ function updateMirrorResult(payload) {
                 sheet.getRange(i + 1, statusCol).setValue(finalStatus);
                 if (type === "FETCH_GROUPS") sheet.getRange(i + 1, resultCol).setValue(payload.grupos || payload.groups);
                 SpreadsheetApp.flush(); // Garante persistência imediata
+            } else if (status === "REPROVADO") {
+                sheet.getRange(i + 1, statusCol).setValue("REPROVADO");
+                sheet.getRange(i + 1, errorCol).setValue(msg); // Opcional: motivo
+                SpreadsheetApp.flush();
             } else {
                 sheet.getRange(i + 1, statusCol).setValue("ERRO");
                 sheet.getRange(i + 1, errorCol).setValue(msg);
@@ -773,7 +824,7 @@ function submitMirrorExecution(data) {
 
     if (!sheet) {
         sheet = ss.insertSheet("Espelho_Solicitacoes");
-        sheet.appendRow(["ID", "DATA", "MODELO", "DESTINOS", "GRUPOS", "SOLICITANTE", "ANALISTA", "STATUS", "ERRO", "STATUS_APROVACAO"]);
+        sheet.appendRow(["ID", "DATA", "MODELO", "DESTINOS", "GRUPOS", "SOLICITANTE", "ANALISTA_RESPONSAVEL", "STATUS", "ERRO", "STATUS_APROVACAO"]);
         sheet.setTabColor("Yellow");
         sheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#fff2cc");
     }
@@ -782,21 +833,26 @@ function submitMirrorExecution(data) {
     const timestamp = new Date();
     const requesterEmail = Session.getActiveUser().getEmail();
 
+    // Mapeamento Inteligente
+    const analystData = mapAnalystByEmail(requesterEmail);
+    const finalAnalystEmail = analystData ? analystData.email : requesterEmail;
+    const finalAnalystName = analystData ? analystData.nome : analyst;
+
     sheet.appendRow([
         nextId,
         timestamp,
         modelUser,
         JSON.stringify(targets),
         JSON.stringify(groups),
-        requesterEmail, // Session Email
-        analyst,
+        requesterEmail,
+        finalAnalystEmail, // Grava E-mail
         "PENDENTE_EXECUCAO",
         "",
         "PENDENTE"
     ]);
 
-    // Enviar Notificação de Aprovação para o Analista
-    sendApprovalEmail(analyst, nextId, "MIRROR", modelUser, targets.length + " destinos");
+    // Enviar Notificação de Aprovação
+    sendApprovalEmail(finalAnalystName, finalAnalystEmail, nextId, "MIRROR", modelUser, targets.length + " destinos");
 
     return { success: true, requestId: nextId };
 }
@@ -832,7 +888,32 @@ function handleApprovalAction(e) {
                 return HtmlService.createHtmlOutput("<h2 style='color:orange'>Atenção: Esta solicitação já foi finalizada.</h2>");
             }
 
+            // Atualiza STATUS_APROVACAO
             sheet.getRange(i + 1, statusCol).setValue(newStatus);
+
+            let requesterEmail = "";
+            let analystEmail = "";
+
+            if (type === "RESET" || type === "DESBLOQUEIO" || type === "DESBLOQUEIO_CONTA") {
+                // Solicitações: Analista=Col 7 (H), Solicitante=Col 8 (I)
+                analystEmail = data[i][7];
+                requesterEmail = data[i][8];
+
+                // REMOVIDO: Daemon fará isso
+                // if (action === "reject") { sheet.getRange(i + 1, 10).setValue("REPROVADO"); }
+            } else if (type === "MIRROR") {
+                // Espelho: Solicitante=Col 5 (F), Analista=Col 6 (G)
+                requesterEmail = data[i][5];
+                analystEmail = data[i][6];
+
+                // REMOVIDO: Daemon fará isso
+                // if (action === "reject") { sheet.getRange(i + 1, 8).setValue("REPROVADO"); }
+            }
+
+            // Envia e-mail de Reprovação ao Solicitante
+            // REMOVIDO: Daemon fará isso
+            // if (action === "reject" && requesterEmail) { sendRejectionEmail(...) }
+
             found = true;
             break;
         }
@@ -853,22 +934,68 @@ function handleApprovalAction(e) {
     }
 }
 
-function sendApprovalEmail(analystName, requestId, type, info1, info2) {
+function sendRejectionEmail(requesterEmail, analystEmail, requestId, type) {
+    if (!requesterEmail) return;
+
+    const subject = `🚫 Solicitação Reprovada: #${requestId}`;
+    // Tenta obter nome do analista a partir do email (opcional, ou usa o proprio email)
+    const analystName = analystEmail ? analystEmail.split("@")[0] : "Suporte";
+
+    // Se analystEmail for válido, usamos a personificação. Se não, vai genérico.
+    // Para simplificar, usamos a mesma logica do sendApproval
+
+    let htmlBody = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+            <h2 style="color: #dc2626;">Solicitação Reprovada</h2>
+            <p>Olá,</p>
+            <p>Informamos que sua solicitação <strong>#${requestId}</strong> (${type}) foi <strong>REPROVADA</strong> pelo analista responsável.</p>
+            <p><strong>Motivo/Ação:</strong> Para entender o motivo da rejeição ou ajustar a solicitação, por favor entre em contato diretamente com o analista responsável.</p>
+            
+            <p style="background-color: #f3f4f6; padding: 10px; border-radius: 5px; margin-top: 15px;">
+                <strong>Analista Responsável:</strong> ${analystEmail || "Não identificado"}<br>
+            </p>
+            
+            <hr style="margin-top: 30px; border: 0; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">Sistema de Gerenciamento de Identidades</p>
+        </div>
+    `;
+
+    try {
+        MailApp.sendEmail({
+            to: requesterEmail,
+            subject: subject,
+            name: `Sistema de Reset (via ${analystName})`,
+            replyTo: analystEmail || requesterEmail, // Se reclamar, user fala com analista
+            htmlBody: htmlBody
+        });
+    } catch (e) {
+        console.error("Erro envio reprovação: " + e.message);
+    }
+}
+
+function sendApprovalEmail(analystName, analystEmail, requestId, type, info1, info2) {
     const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
     const sheetAnalistas = ss.getSheetByName("Analistas");
     if (!sheetAnalistas) return;
 
     const data = sheetAnalistas.getDataRange().getValues();
-    let emailAnalista = "";
+    let emailDestino = "";
 
+    // Busca o email do analista na planilha (caso não venha por parâmetro ou para validar)
     for (let i = 1; i < data.length; i++) {
         if (String(data[i][1]).trim() === String(analystName).trim()) {
-            emailAnalista = data[i][2];
+            emailDestino = data[i][2];
             break;
         }
     }
 
-    if (!emailAnalista) return;
+    if (!emailDestino) {
+        if (analystEmail && analystEmail.includes("@")) {
+            emailDestino = analystEmail;
+        } else {
+            return;
+        }
+    }
 
     // Constrói Links
     const scriptUrl = ScriptApp.getService().getUrl();
@@ -900,8 +1027,10 @@ function sendApprovalEmail(analystName, requestId, type, info1, info2) {
 
     try {
         MailApp.sendEmail({
-            to: emailAnalista,
+            to: emailDestino,
             subject: subject,
+            name: `Sistema de Reset (via ${analystName})`,
+            replyTo: analystEmail || emailDestino,
             htmlBody: `
                 <!DOCTYPE html>
                 <html>
@@ -1149,8 +1278,8 @@ function handleUnifiedQueue() {
             let statusAprov = row[10] ? String(row[10]).toUpperCase().trim() : "";        // Col 11 (K)
             let taskType = row[11] || "RESET";                                            // Col 12 (L)
 
-            // STATUS_PROCESSAMENTO=PENDENTE e STATUS_APROVACAO=APROVADO
-            if (statusProc === "PENDENTE" && statusAprov === "APROVADO") {
+            // STATUS_PROCESSAMENTO=PENDENTE e STATUS_APROVACAO=APROVADO OU REPROVADO
+            if (statusProc === "PENDENTE" && (statusAprov === "APROVADO" || statusAprov === "REPROVADO")) {
                 let filial = row[2];
                 let centroCusto = row[6];
                 let emailsLideres = [];
@@ -1168,7 +1297,8 @@ function handleUnifiedQueue() {
                     centro_custo: centroCusto,
                     aba: filial,
                     analista: row[7],
-                    solicitante: row[8]
+                    solicitante: row[8],
+                    status_aprovacao: statusAprov
                 });
             }
         }
@@ -1198,14 +1328,15 @@ function handleUnifiedQueue() {
             let status = String(eData[i][7]).toUpperCase().trim();          // Col H
             let statusAprov = String(eData[i][9]).toUpperCase().trim();     // Col J
 
-            if (status === "PENDENTE_EXECUCAO" && statusAprov === "APROVADO") {
+            if (status === "PENDENTE_EXECUCAO" && (statusAprov === "APROVADO" || statusAprov === "REPROVADO")) {
                 requests.push({
                     task_type: "MIRROR",
                     id_solicitacao: String(eData[i][0]),
                     user_modelo: eData[i][2],
                     targets: JSON.parse(eData[i][3]),
                     grupos: JSON.parse(eData[i][4]),
-                    analista: eData[i][6]
+                    analista: eData[i][6],
+                    status_aprovacao: statusAprov
                 });
             }
         }

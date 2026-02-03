@@ -73,13 +73,18 @@ function Invoke-Retry {
 # --- FUNÇÕES DE EMAIL ---
 
 function Send-ResetEmail {
-    param($Para, $CC, $Usuario, $NomeColaborador, $NovaSenha, $Executor)
+    param($Para, $CC, $Usuario, $NomeColaborador, $NovaSenha, $Executor, $FromEmail)
     $smtpServer = "smtpml.magazineluiza.intranet"
     $assunto = "Senha Resetada - $Usuario"
     $primeiroNome = ($NomeColaborador -split ' ')[0]
 
+    # Validação do Remetente (Analista)
+    $remetente = "suporte-infra-cds@luizalabs.com"
+    if ($FromEmail -and $FromEmail -match "^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$") {
+        $remetente = $FromEmail
+    }
 
-    $templatePath = Join-Path $PSScriptRoot "..\Templates\Template_Reset_Email.html"
+    $templatePath = Join-Path $PSScriptRoot "Template_Reset_Email.html"
     
     if (Test-Path $templatePath) {
         $corpoHtml = Get-Content $templatePath -Raw -Encoding UTF8
@@ -94,7 +99,7 @@ function Send-ResetEmail {
 
     try {
         $msg = New-Object System.Net.Mail.MailMessage
-        $msg.From = "suporte-infra-cds@luizalabs.com"
+        $msg.From = $remetente
         $msg.To.Add($Para)
         if ($CC) { $CC -split ";" | ForEach-Object { if ($_) { $msg.CC.Add($_.Trim()) } } }
         $msg.Subject = $assunto
@@ -112,6 +117,108 @@ function Send-ResetEmail {
 }
 
 # --- FUNÇÕES DE NEGÓCIO ---
+
+function Send-RejectEmail {
+    param($Para, $NomeSolicitante, $IdSolicitacao, $Tipo, $AnalistaEmail, $AnalistaNome)
+    
+    $subject = "🚫 Solicitação Reprovada: #$IdSolicitacao"
+    
+    $remetente = "suporte-infra-cds@luizalabs.com"
+    if ($AnalistaEmail -and $AnalistaEmail -match "^[\w\.-]+@([\w-]+\.)+[\w-]{2,4}$") {
+        $remetente = $AnalistaEmail
+    }
+
+    $corpoHtml = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border-left: 5px solid #dc2626; }
+        .header { background-color: #ffffff; padding: 20px; border-bottom: 1px solid #e5e7eb; }
+        .title { color: #dc2626; font-size: 24px; font-weight: bold; margin: 0; }
+        .content { padding: 30px; color: #374151; line-height: 1.6; }
+        .footer { background-color: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; }
+        .info-box { background-color: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; padding: 15px; border-radius: 6px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Solicitação Reprovada</h1>
+        </div>
+        <div class="content">
+            <p>Olá,</p>
+            <p>Informamos que sua solicitação <strong>#$IdSolicitacao</strong> ($Tipo) foi <strong>REPROVADA</strong>.</p>
+            
+            <div class="info-box">
+                <strong>Ação:</strong> Para entender o motivo ou ajustar sua solicitação, entre em contato com o analista responsável.
+            </div>
+
+            <p><strong>Analista Responsável:</strong> $AnalistaEmail</p>
+        </div>
+        <div class="footer">
+            Sistema de Gerenciamento de Identidades &bull; Suporte Infra CDs
+        </div>
+    </div>
+</body>
+</html>
+"@
+
+    try {
+        $msg = New-Object System.Net.Mail.MailMessage
+        $msg.From = $remetente
+        $msg.To.Add($Para)
+        $msg.Subject = $subject
+        $msg.Body = $corpoHtml
+        $msg.IsBodyHtml = $true
+        
+        $smtp = New-Object System.Net.Mail.SmtpClient("smtp.luizalabs.com", 25) # Hardcoded SMTP for safety/consistency match with other funcs
+        $smtp.EnableSsl = $false # Internal relay usually no SSL on port 25
+        $smtp.Send($msg)
+        return $true
+    }
+    catch {
+        Write-Log "Erro envio email reprovação: $_" "ERROR"
+        return $false
+    }
+}
+
+function Invoke-RejectUser {
+    param($Task)
+    $id = $Task.id_solicitacao
+    $user = $Task.user_name
+    Write-Log "Processando REJEIÇÃO para solicitação #$id ($user)..." "WARN"
+
+    # Envia Email
+    $aprovadorEmail = $Task.analista # ou $Task.aprovador em alguns contextos
+    # Se analista não vier, tentar pegar de outra prop ou usar default
+    if (-not $aprovadorEmail) { $aprovadorEmail = $Task.aprovador }
+
+    # Solicitante email logic could be 'solicitante' or 'email_colaborador' depending on task logic
+    # Reset tasks have 'solicitante' mapped now in Backend
+    $solicitanteEmail = $Task.solicitante
+    if (-not $solicitanteEmail) { $solicitanteEmail = $Task.email_colaborador } # Fallback for old tasks
+
+    if ($solicitanteEmail) {
+        Send-RejectEmail -Para $solicitanteEmail -IdSolicitacao $id -Tipo $Task.task_type -AnalistaEmail $aprovadorEmail
+        Write-Log "Email de reprovação enviado para $solicitanteEmail (De: $aprovadorEmail)" "SUCCESS"
+    }
+    else {
+        Write-Log "Não foi possível enviar email de reprovação: Email solicitante não encontrado." "WARN"
+    }
+
+    # Finaliza no Backend
+    if ($Task.task_type -eq "MIRROR" -or $Task.task_type -eq "FETCH_GROUPS") {
+        # Mirror usa endpoint específico
+        Send-MirrorResult -Id $id -Status "REPROVADO" -Msg "Solicitação recusada pelo analista." -Type $Task.task_type
+    }
+    else {
+        # Reset usa endpoint padrão audit
+        Send-Result -Id $id -Type "RESET" -Status "REPROVADO" -Msg "REPROVADO PELO ANALISTA" -Task $Task
+    }
+}
 
 function Invoke-ResetUser {
     param($Task)
@@ -136,8 +243,9 @@ function Invoke-ResetUser {
         # 4. Forçar troca (pwdLastSet = 0)
         Set-ADUser -Identity $user -ChangePasswordAtLogon $true -ErrorAction Stop
 
-        # 5. Enviar Email
-        Send-ResetEmail -Para $Task.email_colaborador -CC $Task.email_gestor -Usuario $user -NomeColaborador $Task.nome -NovaSenha $newPassword -Executor "AUTOMACAO_DAEMON"
+        # 5. Enviar Email (Personificado com E-mail do Analista)
+        # Nota: $Task.aprovador contém o email mapeado pelo GAS na coluna 'ANALISTA_RESPONSAVEL'
+        Send-ResetEmail -Para $Task.email_colaborador -CC $Task.email_gestor -Usuario $user -NomeColaborador $Task.nome -NovaSenha $newPassword -Executor "AUTOMACAO_DAEMON" -FromEmail $Task.aprovador
 
         # 6. Reportar Sucesso
         Send-Result -Id $id -Type "RESET" -Status "CONCLUIDO" -Msg "Senha resetada e email enviado." -Task $Task
@@ -328,6 +436,13 @@ while ($true) {
             Write-Log "Processando $($tasks.Count) tarefa(s) da fila." "INFO"
             
             foreach ($task in $tasks) {
+                
+                # VERIFICAÇÃO DE REPROVAÇÃO (NOVO v2.1.6)
+                if ($task.status_aprovacao -eq "REPROVADO") {
+                    Invoke-RejectUser -Task $task
+                    continue # Pula para próxima tarefa
+                }
+
                 $id = $task.id_solicitacao
                 Write-Log "Iniciando Atendimento Solicitação #$id ($($task.task_type))..." "INFO"
                 switch ($task.task_type) {
