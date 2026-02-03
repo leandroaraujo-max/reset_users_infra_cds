@@ -14,7 +14,7 @@
 # Configurações da API (Apps Script)
 $API_URL = "https://script.google.com/a/macros/luizalabs.com/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec"
 $LogDir = "C:\ProgramData\ADResetTool\Logs"
-$LoopIntervalSeconds = 10
+$LoopIntervalSeconds = 5
 $global:smtpServer = "smtpml.magazineluiza.intranet"
 
 # --- PREPARAÇÃO DO AMBIENTE ---

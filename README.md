@@ -75,6 +75,10 @@ O Daemon deve rodar como **Tarefa Agendada (GPO/Task Scheduler)** em um servidor
 
 ## 📜 Histórico de Versões Relevantes
 
+### v1.4.2 (Performance & Fluxo)
+- **Daemon Boost**: Intervalo de polling reduzido para 5 segundos (Resposta 2x mais rápida).
+- **Fix Espelhamento**: Correção no fluxo de aprovação. Solicitações de espelho agora nascem corretamente como `PENDENTE`, exigindo aprovação explicita via e-mail.
+
 ### v1.4.1 (Filtros e Integridade)
 - **Filtros Avançados**: Inserção de filtros por coluna (ID, Nome, User, Email, CC) em todas as tabelas.
 - **Seleção Direcionada**: Lógica de "Selecionar Tudo" agora respeita os filtros visíveis.

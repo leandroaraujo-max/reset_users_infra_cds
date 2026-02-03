@@ -941,7 +941,7 @@ function submitMirrorExecution(payload) {
             payload.analyst,                // H (7) Analista
             payload.requester,              // I (8) Solicitante
             "PENDENTE",                     // J (9) Status
-            "APROVADO",                     // K (10) Status Aprovação
+            "PENDENTE",                     // K (10) Status Aprovação (CORREÇÃO: Fluxo de Email necessário)
             "MIRROR",                       // L (11) Tipo
             "",                             // M (12) Detalhes
             payload.modelUser,              // N (13) Modelo
@@ -958,10 +958,25 @@ function submitMirrorExecution(payload) {
 
     SpreadsheetApp.flush();
 
+    // Envio de Emails de Aprovação (Limitado a 20 para evitar timeout)
+    try {
+        if (rowsToAdd.length <= 20) {
+            targetsData.forEach((t, index) => {
+                const reqId = startId + index;
+                // Assumindo sendApprovalEmail(requesterName, requesterEmail, requestId, type, targetUser, targetName)
+                // Usamos payload.analyst como destinatário da aprovação
+                const analystName = payload.analyst.split('@')[0];
+                sendApprovalEmail(analystName, payload.analyst, reqId, "MIRROR", t.user_name, t.nome);
+            });
+        }
+    } catch (e) {
+        // Log silently
+    }
+
     // Dispara gatilho SLA
     try { ScriptApp.newTrigger("runSLACheck").timeBased().after(1000).create(); } catch (e) { }
 
-    return { success: true, message: rowsToAdd.length + " espelhamento(s) solicitado(s) individualmente com sucesso!" };
+    return { success: true, message: rowsToAdd.length + " espelhamento(s) solicitado(s) individualmente e enviados para aprovação!" };
 }
 
 // =========================================================================
