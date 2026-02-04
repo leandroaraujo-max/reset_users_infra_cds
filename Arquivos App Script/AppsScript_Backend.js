@@ -1,4 +1,4 @@
-// --- VERSÃO API: 1.5.4 (BitLocker Template Runtime Fix) ---
+// --- VERSÃO API: 1.5.6 (BitLocker Global Search Match) ---
 const PROJECT_ID_API = 'maga-bigdata';
 
 // ÚNICA PLANILHA DE GESTÃO

@@ -139,34 +139,61 @@ function Invoke-TaskExecution {
                 $payload = @{ action="report_status"; id=$id; status="CONCLUIDO"; message="Conta desbloqueada com sucesso." }
             }
             "BITLOCKER" {
-                $comp = Get-ADComputer -Filter "Name -eq '$user'" -ErrorAction SilentlyContinue
-                if (-not $comp) {
-                    if ($analista) { Send-BitlockerEmail -Para $analista -Hostname $user -RecoveryKey "NOT_FOUND" -ReqId $id }
-                    throw "Computador '$user' não encontrado no AD."
-                }
-                
-                # v1.5.1: Busca por prefixo do ID da Senha (8 dígitos)
+                # v1.5.5: Busca Inteligente (Global por ID ou Local por Hostname)
                 $prefix = $req.password_id_prefix
-                Write-Log "Buscando chave BitLocker para $user com prefixo ID: $prefix"
-                
-                $allRecoveries = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation'" -SearchBase $comp.DistinguishedName -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID
-                
-                # Filtra pelo prefixo (removendo chaves {} se houver)
-                $recovery = $allRecoveries | Where-Object { 
-                    $cleanId = $_."msFVE-RecoveryPasswordID".Replace("{", "").Replace("}", "")
-                    $cleanId.StartsWith($prefix) 
-                } | Sort-Object whenCreated -Descending | Select-Object -First 1
-                
+                $recovery = $null
+                $hostnameResolved = $user
+
+                if ($prefix) {
+                    Write-Log "Iniciando busca GLOBAL BitLocker por ID: $prefix"
+                    # v1.5.6: Filtro LDAP resiliente (igual ao dsa.msc). 
+                    # Usamos '*' no início e fim para garantir o match independente de '{' no esquema.
+                    $recovery = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation' -and msFVE-RecoveryPasswordID -like '*$prefix*'" -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | Select-Object -First 1
+                    
+                    if ($recovery) {
+                        # Extrai o nome do computador do DN do objeto pai
+                        $parentDN = $recovery.DistinguishedName -replace '^CN=[^,]+,',''
+                        $compParent = Get-ADComputer -Identity $parentDN -ErrorAction SilentlyContinue
+                        if ($compParent) { $hostnameResolved = $compParent.Name }
+                        Write-Log "Chave localizada via ID Global. Hostname detectado: $hostnameResolved"
+                    }
+                }
+
+                # Fallback ou Busca por Hostname se não encontrou por ID ou ID não foi fornecido
                 if (-not $recovery) {
-                    if ($analista) { Send-BitlockerEmail -Para $analista -Hostname $user -RecoveryKey "NOT_FOUND" -ReqId $id }
-                    throw "Nenhuma chave BitLocker encontrada para o computador '$user' com ID começando em '$prefix'."
+                    Write-Log "Buscando computador por Hostname: $user"
+                    $comp = Get-ADComputer -Filter "Name -eq '$user'" -ErrorAction SilentlyContinue
+                    if (-not $comp) {
+                        if ($analista) { Send-BitlockerEmail -Para $analista -Hostname $user -RecoveryKey "NOT_FOUND" -ReqId $id }
+                        throw "Computador/ID '$user' não encontrado no AD."
+                    }
+
+                    Write-Log "Buscando chaves BitLocker na estação: $($comp.Name)"
+                    $allRecoveries = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation'" -SearchBase $comp.DistinguishedName -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID
+                    
+                    if ($prefix) {
+                        # Filtra pelo prefixo dentro da máquina específica (caso a busca global tenha falhado ou retornado múltiplos)
+                        $recovery = $allRecoveries | Where-Object { 
+                            $cleanId = $_."msFVE-RecoveryPasswordID".Replace("{", "").Replace("}", "")
+                            $cleanId.StartsWith($prefix) 
+                        } | Sort-Object whenCreated -Descending | Select-Object -First 1
+                    } else {
+                        # Sem prefixo, usamos a chave mais recente vinculada à máquina
+                        $recovery = $allRecoveries | Sort-Object whenCreated -Descending | Select-Object -First 1
+                    }
+                    $hostnameResolved = $comp.Name
+                }
+
+                if (-not $recovery) {
+                    if ($analista) { Send-BitlockerEmail -Para $analista -Hostname $hostnameResolved -RecoveryKey "NOT_FOUND" -ReqId $id }
+                    throw "Nenhuma chave BitLocker encontrada para '$hostnameResolved' (Filtro ID: $prefix)."
                 }
                 
                 $realKey = $recovery."msFVE-RecoveryPassword"
                 $fullId = $recovery."msFVE-RecoveryPasswordID"
 
                 if ($analista) {
-                    Send-BitlockerEmail -Para $analista -Hostname $user -RecoveryKey $realKey -KeyId $fullId -ReqId $id
+                    Send-BitlockerEmail -Para $analista -Hostname $hostnameResolved -RecoveryKey $realKey -KeyId $fullId -ReqId $id
                 }
                 
                 $payload = @{ 
@@ -175,7 +202,7 @@ function Invoke-TaskExecution {
                     status = "SUCESSO"
                     recoveryKey = $realKey
                     recoveryKeyId = $fullId
-                    hostname = $user
+                    hostname = $hostnameResolved
                 }
             }
             default {
