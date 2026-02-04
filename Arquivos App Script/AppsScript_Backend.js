@@ -1,4 +1,4 @@
-// --- VERSÃO API: 1.5.7 (Daemon v5.1 Merge & Resilience) ---
+// --- VERSÃO API: 1.5.8 (BitLocker Data & Search Fix) ---
 const PROJECT_ID_API = 'maga-bigdata';
 
 // ÚNICA PLANILHA DE GESTÃO
@@ -1741,7 +1741,7 @@ function getAnalystsListAPI() {
 }
 
 /**
- * v1.5.0: Armazena custódia do BitLocker e mantém status PENDENTE
+ * v1.5.8: Armazena custódia do BitLocker e mantém status PENDENTE
  * Chamado pelo Daemon após sucesso na busca.
  */
 function updateBitlockerCustody(payload) {
@@ -1749,24 +1749,27 @@ function updateBitlockerCustody(payload) {
 
     // 1. Aba de Custódia (Segura, não synced BQ)
     let sheetKeys = ss.getSheetByName("Bitlocker");
+    const expected = ["ID_SOLICITACAO", "DATA_AD", "FILIAL", "HOSTNAME_ID", "RECOVERY_KEY", "KEY_ID"];
+
     if (!sheetKeys) {
         sheetKeys = ss.insertSheet("Bitlocker");
-        // Ensure Headers
-        sheetKeys.appendRow(["ID_SOLICITACAO", "DATA_AD", "HOSTNAME_ID", "RECOVERY_KEY", "KEY_ID"]);
-        sheetKeys.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#e6b8af");
-        sheetKeys.hideSheet();
+        sheetKeys.appendRow(expected);
+        sheetKeys.getRange(1, 1, 1, expected.length).setFontWeight("bold").setBackground("#e6b8af");
     }
+
     // Garante headers (Auto-Manage)
-    const expected = ["ID_SOLICITACAO", "DATA_AD", "HOSTNAME_ID", "RECOVERY_KEY", "KEY_ID"];
-    if (sheetKeys.getLastRow() > 0 && String(sheetKeys.getRange(1, 1).getValue()) !== "ID_SOLICITACAO") {
+    if (sheetKeys.getLastRow() === 0) {
+        sheetKeys.appendRow(expected);
+    } else if (String(sheetKeys.getRange(1, 1).getValue()) !== "ID_SOLICITACAO") {
         sheetKeys.insertRowBefore(1);
-        sheetKeys.getRange(1, 1, 1, 5).setValues([expected]);
+        sheetKeys.getRange(1, 1, 1, expected.length).setValues([expected]);
     }
 
     // 2. Registra Chave
     sheetKeys.appendRow([
         String(payload.id).trim(),
         new Date(),
+        payload.filial || "-",
         payload.hostname,
         payload.recoveryKey,
         payload.recoveryKeyId
@@ -1779,7 +1782,6 @@ function updateBitlockerCustody(payload) {
 
     for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]).trim() === reqId) {
-            // Não muda status para CONCLUIDO aqui! O analista fará isso presencialmente.
             sheetFila.getRange(i + 1, 13).setValue("Chave localizada e enviada para custódia do analista.");
             break;
         }

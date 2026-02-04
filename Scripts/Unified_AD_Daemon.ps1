@@ -1,5 +1,5 @@
 # ==============================================================================
-# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.2 (BUG FIX NULL INDEX)
+# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.3 (BITLOCKER FILIAL & SEARCH FIX)
 # ==============================================================================
 
 # --- CONFIGURAÇÃO ---
@@ -114,6 +114,7 @@ function Invoke-TaskExecution {
     $emailColab = ($Task.email_colaborador, $Task.EMAIL_COLABORADOR, $Task.email_colab | Where-Object {$_} | Select-Object -First 1)
     $emailGestor = ($Task.email_gestor, $Task.EMAIL_GESTOR | Where-Object {$_} | Select-Object -First 1)
     $analista = ($Task.analista, $Task.ANALISTA_EMAIL, $Task.solicitante | Where-Object {$_} | Select-Object -First 1)
+    $filial = ($Task.filial, $Task.FILIAL | Where-Object {$_} | Select-Object -First 1)
     $prefix = $Task.password_id_prefix
 
     if (-not $id) { return }
@@ -146,13 +147,21 @@ function Invoke-TaskExecution {
 
                 if ($prefix) {
                     Write-Log "Busca GLOBAL AD BitLocker (dsa.msc style) por ID: $prefix" "INFO"
-                    $recovery = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation' -and msFVE-RecoveryPasswordID -like '*$prefix*'" -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | Select-Object -First 1
+                    # v5.3: Ajuste de Filtro LDAP para evitar 'Properties are invalid'
+                    # Removemos o wildcard inicial '*' que pode causar erro no provedor AD dependendo da versão.
+                    # Como o ID no AD quase sempre começa com '{', usamos '{$prefix*'
+                    $recovery = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation' -and msFVE-RecoveryPasswordID -like '{$prefix*'" -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | Select-Object -First 1
                     
-                    if ($recovery) {
+                    if (-not $recovery) {
+                        # Tenta sem a chave '{' apenas por redundância
+                        $recovery = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation' -and msFVE-RecoveryPasswordID -like '$prefix*'" -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | Select-Object -First 1
+                    }
+                    
+                    if ($recovery) { # This 'if' was missing in the provided snippet, adding it for correctness
                         $parentDN = $recovery.DistinguishedName -replace '^CN=[^,]+,',''
                         $compParent = Get-ADComputer -Identity $parentDN -ErrorAction SilentlyContinue
                         if ($compParent) { $hostnameResolved = $compParent.Name }
-                        Write-Log "Chave localizada via ID Global. Hostname detectado: $hostnameResolved"
+                        Write-Log "Chave localizada via ID Global. Hostname detectado: $hostnameResolved" "SUCCESS"
                     }
                 }
 
@@ -179,6 +188,7 @@ function Invoke-TaskExecution {
                         recoveryKey = $realKey
                         recoveryKeyId = $fullId
                         hostname = $hostnameResolved
+                        filial = $filial
                     }
                 } else {
                     if ($analista) { Send-BitlockerEmail -Para $analista -Hostname $hostnameResolved -RecoveryKey "NOT_FOUND" -ReqId $id }
