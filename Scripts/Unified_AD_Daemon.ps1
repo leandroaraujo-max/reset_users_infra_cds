@@ -1,5 +1,5 @@
 # ==============================================================================
-# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.4 (BITLOCKER LDAP FIX)
+# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.5 (BITLOCKER RESILIENCE FIX)
 # ==============================================================================
 
 # --- CONFIGURAÇÃO ---
@@ -146,17 +146,17 @@ function Invoke-TaskExecution {
                 $hostnameResolved = $user
 
                 if ($prefix) {
-                    Write-Log "Busca GLOBAL AD BitLocker (LDAP/dsa.msc style) por ID: $prefix" "INFO"
-                    # v5.4: Uso de -LDAPFilter (Sintaxe pura do AD). 
-                    # O ID no AD é armazenado como string '{GUID}'. Buscamos por '{$prefix*'
-                    $ldapQuery = "(msFVE-RecoveryPasswordID={$prefix*})"
-                    $recovery = Get-ADObject -LDAPFilter $ldapQuery -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | Select-Object -First 1
+                    Write-Log "Busca GLOBAL AD BitLocker (v5.5 - Resiliência) por ID: $prefix" "INFO"
+                    # v5.5: Filtro resiliente via Where-Object. 
+                    # Evitamos o erro 'Properties are invalid' do provedor AD em buscas parciais de GUID.
+                    $recovery = Get-ADObject -Filter "objectClass -eq 'msFVE-RecoveryInformation'" -Properties msFVE-RecoveryPassword, msFVE-RecoveryPasswordID | 
+                        Where-Object { $_."msFVE-RecoveryPasswordID" -like "*$prefix*" } | Select-Object -First 1
                     
                     if ($recovery) {
                         $parentDN = $recovery.DistinguishedName -replace '^CN=[^,]+,',''
                         $compParent = Get-ADComputer -Identity $parentDN -ErrorAction SilentlyContinue
                         if ($compParent) { $hostnameResolved = $compParent.Name }
-                        Write-Log "Chave localizada via LDAP (ID: $prefix). Hostname: $hostnameResolved" "SUCCESS"
+                        Write-Log "Chave localizada (ID: $prefix). Hostname: $hostnameResolved" "SUCCESS"
                     }
                 }
 
@@ -213,7 +213,7 @@ function Invoke-TaskExecution {
 }
 
 # --- LOOP PRINCIPAL ---
-Write-Log "Daemon v5.4 ATIVO - Estrutura Resiliente + LDAP Fix" "SUCCESS"
+Write-Log "Daemon v5.5 ATIVO - Estrutura Resiliente + Search Fix" "SUCCESS"
 
 while ($true) {
     try {
