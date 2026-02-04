@@ -1,5 +1,5 @@
 # ==============================================================================
-# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.1 (PRODUÇÃO RESILIENTE)
+# IDENTITY MANAGER - SUPORTE INFRA CDS - v5.2 (BUG FIX NULL INDEX)
 # ==============================================================================
 
 # --- CONFIGURAÇÃO ---
@@ -105,15 +105,15 @@ function Send-BitlockerEmail {
 function Invoke-TaskExecution {
     param($Task)
     
-    # Mapeamento Dinâmico v5.1 (Resiliência Máxima)
-    $id = ($Task.id_solicitacao, $Task.id, $Task.ID | Where-Object {$_})[0]
-    $user = ($Task.user_name, $Task.USER_NAME, $Task.usuario | Where-Object {$_})[0]
-    $type = ($Task.task_type, $Task.TIPO_TAREFA, $Task.type | Where-Object {$_})[0]
-    $pwd  = ($Task.nova_senha, $Task.NOVA_SENHA, $Task.senha | Where-Object {$_})[0]
-    $nome = ($Task.nome, $Task.NOME_COLABORADOR, $Task.NOME | Where-Object {$_})[0]
-    $emailColab = ($Task.email_colaborador, $Task.EMAIL_COLABORADOR, $Task.email_colab | Where-Object {$_})[0]
-    $emailGestor = ($Task.email_gestor, $Task.EMAIL_GESTOR | Where-Object {$_})[0]
-    $analista = ($Task.analista, $Task.ANALISTA_EMAIL, $Task.solicitante | Where-Object {$_})[0]
+    # Mapeamento Dinâmico v5.2 (Resiliência Máxima - Null Safe)
+    $id = ($Task.id_solicitacao, $Task.id, $Task.ID | Where-Object {$_} | Select-Object -First 1)
+    $user = ($Task.user_name, $Task.USER_NAME, $Task.usuario | Where-Object {$_} | Select-Object -First 1)
+    $type = ($Task.task_type, $Task.TIPO_TAREFA, $Task.type | Where-Object {$_} | Select-Object -First 1)
+    $pwd  = ($Task.nova_senha, $Task.NOVA_SENHA, $Task.senha | Where-Object {$_} | Select-Object -First 1)
+    $nome = ($Task.nome, $Task.NOME_COLABORADOR, $Task.NOME | Where-Object {$_} | Select-Object -First 1)
+    $emailColab = ($Task.email_colaborador, $Task.EMAIL_COLABORADOR, $Task.email_colab | Where-Object {$_} | Select-Object -First 1)
+    $emailGestor = ($Task.email_gestor, $Task.EMAIL_GESTOR | Where-Object {$_} | Select-Object -First 1)
+    $analista = ($Task.analista, $Task.ANALISTA_EMAIL, $Task.solicitante | Where-Object {$_} | Select-Object -First 1)
     $prefix = $Task.password_id_prefix
 
     if (-not $id) { return }
@@ -218,7 +218,7 @@ while ($true) {
         foreach ($t in $tasks) { 
             # Tratamento para tarefas REPROVADAS manualmente na guia
             if ($t.status_aprovacao -eq "REPROVADO") {
-                $rid = ($t.id_solicitacao, $t.id, $t.ID | Where-Object {$_})[0]
+                $rid = ($t.id_solicitacao, $t.id, $t.ID | Where-Object {$_} | Select-Object -First 1)
                 Write-Log "Limpando ID #$rid (Status: REPROVADO)" "WARN"
                 $p = @{ action="report_status"; id=$rid; status="REPROVADO" }
                 Invoke-RestMethod -Uri $API_URL -Method Post -Body (ConvertTo-Json $p) -ContentType "application/json"
