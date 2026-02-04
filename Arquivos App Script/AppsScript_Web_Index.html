@@ -219,7 +219,7 @@
 
                 <!-- Versão no canto inferior -->
                 <div class="text-center text-xs text-gray-400 pt-4 border-t border-gray-100">
-                    v1.5.1 • Leandro Araújo
+                    v1.5.3 • Leandro Araújo
                 </div>
             </div>
         </div>
@@ -1150,11 +1150,9 @@
 
                 // DATA FILTERS (v1.4.0)
                 // DATA FILTERS (v1.4.0)
-                console.log("Version 1.1.4 (Restored) Loaded - Cache Bust");
+                console.log("Version 1.5.3 (BitLocker Refined) Loaded");
                 const searchFilters = ref({ id: '', nome: '', user_name: '', email: '', centro_custo: '' });
                 const mirrorFilters = ref({ id: '', nome: '', user_name: '', email: '', centro_custo: '' });
-
-                // BITLOCKER STATE
 
                 const bitlockerLoading = ref(false);
                 const bitlockerRes = ref(null);
@@ -1712,7 +1710,8 @@
                     searchFilters, mirrorFilters, filterList,
 
                     // Bitlocker
-                    bitlockerHostname, bitlockerAnalyst, bitlockerLoading, bitlockerRes, bitlockerStatusMsg, bitlockerShowKey, requestBitlocker,
+                    bitlockerHostname, bitlockerUserId, bitlockerUserFound, bitlockerSearchingUser, bitlockerAnalyst,
+                    bitlockerLoading, bitlockerRes, bitlockerStatusMsg, bitlockerShowKey, fetchBitlockerUserInfo, requestBitlocker,
 
                     // Mirror
                     mirrorStep, mirrorForm, mirrorGroups, mirrorLoading, mirrorStatusMsg, fetchMirrorGroups,
