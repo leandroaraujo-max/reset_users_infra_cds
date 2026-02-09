@@ -311,9 +311,16 @@ function Invoke-TaskExecution {
                 
                 $groups = (Get-ADPrincipalGroupMembership -Identity $userModelo -ErrorAction Stop | Select-Object -ExpandProperty Name) -join ";"
                 
-                $payload.status = "CONCLUIDO"
-                $payload.message = "Grupos obtidos com sucesso."
-                $payload.grupos = $groups
+                # Para FETCH_GROUPS, usa action update_mirror_result
+                $payload = @{ 
+                    action    = "update_mirror_result"
+                    type      = "FETCH_GROUPS"
+                    id        = $id
+                    requestId = $id
+                    status    = "CONCLUIDO"
+                    msg_error = ""
+                    grupos    = $groups
+                }
             }
 
             "RESET" {

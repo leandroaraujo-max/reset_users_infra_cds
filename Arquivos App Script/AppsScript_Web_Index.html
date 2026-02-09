@@ -1456,9 +1456,9 @@
                         mirrorStatusMsg.value = 'Convertendo matrícula em username...';
 
                         // Busca o username no BigQuery usando a matrícula
-                        google.script.run.withSuccessHandler(res => {
-                            if (res.success && res.data && res.data.length > 0) {
-                                const user = res.data[0];
+                        google.script.run.withSuccessHandler(results => {
+                            if (results && results.length > 0) {
+                                const user = results[0];
                                 mirrorForm.value.modelUser = user.user_name;
                                 mirrorStatusMsg.value = `Username encontrado: ${user.user_name}`;
 
