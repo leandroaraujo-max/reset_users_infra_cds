@@ -323,6 +323,79 @@ function Invoke-TaskExecution {
                 }
             }
 
+            "MIRROR" {
+                # v6.1: Espelhamento de Grupos
+                $gruposParaAdicionar = ($Task.grupos_selecionados, $Task.GRUPOS_SELECIONADOS | Where-Object { $_ } | Select-Object -First 1)
+                
+                if (-not $gruposParaAdicionar) {
+                    throw "Nenhum grupo especificado para espelhamento."
+                }
+                
+                # Parse JSON se necessário
+                if ($gruposParaAdicionar -is [string]) {
+                    if ($gruposParaAdicionar.Trim().StartsWith('[')) {
+                        $gruposParaAdicionar = $gruposParaAdicionar | ConvertFrom-Json
+                    }
+                    else {
+                        $gruposParaAdicionar = $gruposParaAdicionar -split ';' | Where-Object { $_ }
+                    }
+                }
+                
+                Write-Log "Espelhando $($gruposParaAdicionar.Count) grupo(s) para $user" "INFO" $LogPfx
+                
+                $adicionados = @()
+                $jaExistentes = @()
+                $erros = @()
+                
+                foreach ($grupo in $gruposParaAdicionar) {
+                    try {
+                        # Verifica se o usuário já é membro
+                        $isMember = Get-ADPrincipalGroupMembership -Identity $user -ErrorAction Stop | 
+                        Where-Object { $_.Name -eq $grupo }
+                        
+                        if ($isMember) {
+                            $jaExistentes += $grupo
+                            Write-Log "Usuário já é membro de: $grupo" "WARN" $LogPfx
+                        }
+                        else {
+                            Add-ADGroupMember -Identity $grupo -Members $user -ErrorAction Stop
+                            $adicionados += $grupo
+                            Write-Log "Adicionado ao grupo: $grupo" "SUCCESS" $LogPfx
+                        }
+                    }
+                    catch {
+                        $erros += "$grupo : $($_.Exception.Message)"
+                        Write-Log "Erro ao adicionar a $grupo : $($_.Exception.Message)" "ERROR" $LogPfx
+                    }
+                }
+                
+                # Monta mensagem de resultado
+                $msgParts = @()
+                if ($adicionados.Count -gt 0) {
+                    $msgParts += "Adicionado a $($adicionados.Count) grupo(s)"
+                }
+                if ($jaExistentes.Count -gt 0) {
+                    $msgParts += "$($jaExistentes.Count) já existente(s)"
+                }
+                if ($erros.Count -gt 0) {
+                    $msgParts += "$($erros.Count) erro(s)"
+                }
+                
+                $msgFinal = $msgParts -join ", "
+                
+                if ($erros.Count -gt 0 -and $adicionados.Count -eq 0) {
+                    throw "Falha total no espelhamento: $($erros -join '; ')"
+                }
+                
+                $payload.status = "CONCLUIDO"
+                $payload.message = $msgFinal
+                $payload.detalhes = @{
+                    adicionados   = $adicionados
+                    ja_existentes = $jaExistentes
+                    erros         = $erros
+                } | ConvertTo-Json -Compress
+            }
+
             "RESET" {
                 if (-not $clearPwd) { throw "Senha ausente para Reset." }
                 $securePwd = ConvertTo-SecureString $clearPwd -AsPlainText -Force
