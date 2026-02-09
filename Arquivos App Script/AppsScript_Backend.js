@@ -1,8 +1,8 @@
-// --- VERSÃO API: 1.5.8 (BitLocker Data & Search Fix) ---
+// --- VERSÃO API: 1.6.6 (BITLOCKER FIX) ---
 const PROJECT_ID_API = 'maga-bigdata';
 
-// ÚNICA PLANILHA DE GESTÃO
-const ID_PLANILHA_GESTAO = '1Q13WpkiqRVjoniHT938JJlEdHqCFBYoywdXsDf2SIw8';
+// ÚNICA PLANILHA DE GESTÃO (Obtida dinamicamente via Database.js)
+// [CONSTANTE REMOVIDA] ID_PLANILHA_GESTAO foi descontinuado na v1.6.6 
 
 // Config email Admin
 const EMAIL_ADMIN = "leandro.araujo@luizalabs.com";
@@ -23,6 +23,11 @@ function doGet(e) {
         // v1.5.0: Lista Analistas Otimizada
         if (e.parameter.mode === 'get_analysts_api') {
             return ContentService.createTextOutput(JSON.stringify(getAnalystsListAPI())).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        // DIAGNÓSTICO DE AMBIENTE (v1.6.5)
+        if (e.parameter.mode === 'diag') {
+            return ContentService.createTextOutput(JSON.stringify(handleDiagnostic())).setMimeType(ContentService.MimeType.JSON);
         }
 
         // Daemon v4 Main Queue (Reset & Mirror)
@@ -46,7 +51,7 @@ function doGet(e) {
 
         // DEBUG TEMPORARIO: Estrutura da Planilha
         if (e.parameter.mode === 'debug_queue') {
-            const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+            const ss = getDatabaseConnection();
             const sheet = ss.getSheetByName("Solicitações");
             const data = sheet.getDataRange().getDisplayValues();
             const headers = data[0];
@@ -82,7 +87,7 @@ function doGet(e) {
 // =========================================================================
 
 function getAuthSheet() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let sheet = ss.getSheetByName("AUTH");
     if (!sheet) {
         sheet = ss.insertSheet("AUTH");
@@ -122,6 +127,32 @@ function fetchUserByID(id) {
 }
 
 // 2. LOGIN COM GOOGLE (NOVO)
+// =========================================================================
+// AUTH SYSTEM (Login via Domínio Corporativo)
+// =========================================================================
+
+// Lista Branca de Domínios Permitidos (Domain-Only Auth)
+const ALLOWED_DOMAINS = [
+    'aiqfome.com',
+    'canaltech.com.br',
+    'coopluiza.com.br',
+    'epocacosmeticos.com.br',
+    'fintechmagalu.com.br',
+    'gflogistica.com.br',
+    'hubsales.com.br',
+    'jovemnerd.com.br',
+    'luizalabs.com',
+    'magalu.cloud',
+    'magalupay.com.br',
+    'magazineluiza.com.br',
+    'mtgparticipacoes.com.br',
+    'netshoes.com',
+    'netshoes.com.br',
+    'pjdagropastoril.com.br',
+    'sode.com.br',
+    'stealthelook.com.br'
+];
+
 function loginWithGoogle() {
     const email = Session.getActiveUser().getEmail();
 
@@ -129,24 +160,14 @@ function loginWithGoogle() {
         throw new Error("Não foi possível identificar sua conta Google. Certifique-se de dar permissão ao script.");
     }
 
-    // 1. Validação de Domínio
-    const allowedDomains = [
-        "magazineluiza.com.br",
-        "sode.com.br",
-        "netshoes.com",
-        "netshoes.com.br",
-        "gfllogistica.com.br",
-        "luizalabs.com"
-    ];
-
     const domain = email.split("@")[1];
-    if (!allowedDomains.includes(domain)) {
-        throw new Error("Domínio não autorizado: " + domain);
+
+    if (!ALLOWED_DOMAINS.includes(domain)) {
+        throw new Error("Acesso Negado: Utilize sua conta corporativa. Contas pessoais (@gmail.com) ou de outros domínios não são permitidas. Por favor, faça logout da conta atual e entre com seu e-mail corporativo.");
     }
 
-    // 2. Validação de Acesso (AUTH Sheet ou BigQuery)
-    // Se estiver na planilha AUTH, ok. Mas queremos dados ricos do BigQuery também.
-
+    // Se o domínio for válido, o acesso é concedido (Domain-Only Trust)
+    // Buscamos dados no BQ apenas para enriquecer a sessão, sem bloquear se falhar ou não achar.
     let userDetails = null;
     try {
         userDetails = getUserDetails(email);
@@ -154,51 +175,14 @@ function loginWithGoogle() {
         console.warn("Falha ao buscar detalhes no BQ para " + email + ": " + e.message);
     }
 
-    // Se achou no BQ, usa dados do BQ. Se não, fallback para AUTH sheet (check simples)
-    if (userDetails) {
-        return {
-            success: true,
-            token: email,
-            name: userDetails.nome || email.split("@")[0],
-            email: email,
-            filial: userDetails.filial,
-            centro_custo: userDetails.centro_custo,
-            cargo: userDetails.cargo
-        };
-    }
-
-    // Fallback Sheet AUTH (Legado/Contingência)
-    const sheet = getAuthSheet();
-    const data = sheet.getDataRange().getValues();
-    let userFound = false;
-    let userName = "";
-
-    for (let i = 1; i < data.length; i++) {
-        if (String(data[i][2]).toLowerCase() === String(email).toLowerCase()) {
-            if (String(data[i][5]) !== "ATIVO") {
-                throw new Error("Usuário cadastrado mas não está ATIVO (Status: " + data[i][5] + ").");
-            }
-            userFound = true;
-            userName = data[i][1];
-            break;
-        }
-    }
-
-    if (!userFound) {
-        // Permitir acesso básico se for luizalabs (Auto-provisionamento light)
-        if (domain === "luizalabs.com") {
-            return { success: true, token: email, name: email.split("@")[0], email: email, filial: "MATRIZ", centro_custo: "" };
-        }
-        throw new Error("Usuário não cadastrado no sistema. Solicite acesso ao administrador.");
-    }
-
     return {
         success: true,
         token: email,
-        name: userName,
+        name: (userDetails && userDetails.nome) ? userDetails.nome : email.split("@")[0],
         email: email,
-        filial: "",
-        centro_custo: ""
+        filial: (userDetails && userDetails.filial) ? userDetails.filial : "EXTERNO/CORPORATIVO",
+        centro_custo: (userDetails && userDetails.centro_custo) ? userDetails.centro_custo : "",
+        cargo: (userDetails && userDetails.cargo) ? userDetails.cargo : ""
     };
 }
 
@@ -247,7 +231,7 @@ function requestPasswordReset(email) { ... }
 // Lógica de Fila isolada - ATUALIZADA para incluir email_gestor
 // Lógica de Fila isolada - ATUALIZADA para incluir Resets e Espelhos
 function handlePowerShellQueueRequest() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let usersToReset = [];
 
     // 1. FILA DE RESET (Solicitações)
@@ -330,7 +314,7 @@ function handlePowerShellQueueRequest() {
 // =========================================================================
 
 function ATUALIZAR_CADASTRO_ANALISTAS() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let sheet = ss.getSheetByName("Analistas");
 
     if (!sheet) {
@@ -406,7 +390,7 @@ function getAnalystsList() {
     const cached = cache.get("LISTA_ANALISTAS_SHEET_V2");
     if (cached) return JSON.parse(cached);
 
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Analistas");
     if (!sheet) return ["ERRO: Aba Analistas não existe"];
 
@@ -508,7 +492,7 @@ function searchUserBQ(query) {
  * v1.5.1: Registra solicitação de BitLocker na fila com dados completos do BQ
  */
 function submitBitlockerRequest(payload) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     const timestamp = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy HH:mm:ss");
 
@@ -543,7 +527,7 @@ function submitBitlockerRequest(payload) {
 }
 
 function submitResetQueue(requestData) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let queueSheet = ss.getSheetByName("Solicitações");
 
     if (!queueSheet) {
@@ -637,7 +621,7 @@ function submitResetQueue(requestData) {
  */
 function mapAnalystByEmail(email) {
     if (!email) return null;
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Analistas");
     if (!sheet) return null;
 
@@ -676,7 +660,7 @@ function getNextQueueId(sheet) {
 }
 
 function getQueueWeb() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     if (!sheet) return [];
 
@@ -702,7 +686,7 @@ function getQueueWeb() {
 function getUsuariosAuditados() {
     let set = new Set();
     try {
-        const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+        const ss = getDatabaseConnection();
         let sheet = ss.getSheetByName("Auditoria");
         if (!sheet) return set;
 
@@ -718,7 +702,7 @@ function getUsuariosAuditados() {
 function doPost(e) {
     try {
         const data = JSON.parse(e.postData.contents);
-        const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+        const ss = getDatabaseConnection();
 
         // 1. REPORTE DE STATUS DO DAEMON (v4.8)
         if (data.action === "report_status") {
@@ -805,7 +789,7 @@ function doPost(e) {
 function submitMirrorRequest(userModelo, requester) {
     if (!userModelo) throw new Error("Usuário modelo é obrigatório.");
 
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     // SEGREGAÇÃO v1.3.4: Usa aba dedicada 'Dados_Espelhamento' para busca volátil
     let sheet = ss.getSheetByName("Dados_Espelhamento");
 
@@ -834,7 +818,7 @@ function submitMirrorRequest(userModelo, requester) {
 }
 
 function checkMirrorStatus(requestId) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     // SEGREGAÇÃO v1.3.4: Lê da aba Dados_Espelhamento
     const sheet = ss.getSheetByName("Dados_Espelhamento");
     if (!sheet) throw new Error("Aba Dados_Espelhamento não encontrada.");
@@ -874,7 +858,7 @@ function checkMirrorStatus(requestId) {
 
 // Chamado pelo PowerShell via GET
 function handleMirrorQueueCheck() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let requests = [];
 
     // 1. Busca na fila de capturar grupos (Espelho_Fila) - NÃO PRECISA DE APROVAÇÃO (É SÓ LEITURA)
@@ -919,7 +903,7 @@ function handleMirrorQueueCheck() {
 
 // Chamado pelo PowerShell via POST
 function updateMirrorResult(payload) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const type = payload.type || "FETCH_GROUPS";
 
     // SEGREGAÇÃO v1.3.4: Define aba alvo baseado no tipo
@@ -984,7 +968,7 @@ function updateMirrorResult(payload) {
 
 
 function getBitlockerKey(requestId) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheetKeys = ss.getSheetByName("Bitlocker_Keys");
     if (!sheetKeys) return { success: false, message: "Base de chaves não encontrada" };
 
@@ -1027,7 +1011,7 @@ function submitMirrorExecution(payload) {
         throw new Error("Dados incompletos para espelhamento.");
     }
 
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     const timestamp = Utilities.formatDate(new Date(), "GMT-3", "dd/MM/yyyy HH:mm:ss");
 
@@ -1131,7 +1115,7 @@ function handleApprovalAction(e) {
 
     if (!id) return HtmlService.createHtmlOutput("<h3>Erro: ID não informado.</h3>");
 
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     // UNIFICAÇÃO v1.2.1: Tudo na aba Solicitações
     const sheetName = "Solicitações";
     const statusCol = 11; // Coluna K (Status Aprovação) (1-based index)
@@ -1212,7 +1196,7 @@ function sendRejectionEmail(requesterEmail, analystEmail, requestId, type) {
 }
 
 function sendApprovalEmail(analystName, analystEmail, requestId, type, info1, info2) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheetAnalistas = ss.getSheetByName("Analistas");
     if (!sheetAnalistas) return;
 
@@ -1349,7 +1333,7 @@ function getNextAuditId(sheet) {
  * Execute manualmente uma vez para preencher IDs em registros antigos
  */
 function NUMERAR_AUDITORIA_EXISTENTE() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Auditoria");
     if (!sheet) throw new Error("Aba Auditoria não encontrada.");
 
@@ -1500,7 +1484,7 @@ function fetchLeadersEmails(filial, centroCusto) {
 // =========================================================================
 
 function handleUnifiedQueue() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     let requests = [];
 
     // 1. FILA ÚNICA UNIFICADA (v1.2.0)
@@ -1571,7 +1555,7 @@ function handleUnifiedQueue() {
 }
 
 function debugSheetReader() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     if (!sheet) return "Sheet nao encontrada";
     // Ultimas 5 linhas
@@ -1600,7 +1584,7 @@ function generatePassword() {
  * Os lembretes param automaticamente quando o status deixa de ser 'PENDENTE'.
  */
 function runSLACheck() {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     if (!sheet) return;
 
@@ -1714,7 +1698,7 @@ function getAnalystsListAPI() {
     const cached = cache.get("API_ANALISTAS_LITE");
     if (cached) return JSON.parse(cached);
 
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Analistas");
     if (!sheet) return [];
 
@@ -1741,11 +1725,10 @@ function getAnalystsListAPI() {
 }
 
 /**
- * v1.5.8: Armazena custódia do BitLocker e mantém status PENDENTE
- * Chamado pelo Daemon após sucesso na busca.
+ * v1.5.9: Armazena custódia do BitLocker e atualiza dados na fila
  */
 function updateBitlockerCustody(payload) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
 
     // 1. Aba de Custódia (Segura, não synced BQ)
     let sheetKeys = ss.getSheetByName("Bitlocker");
@@ -1757,7 +1740,7 @@ function updateBitlockerCustody(payload) {
         sheetKeys.getRange(1, 1, 1, expected.length).setFontWeight("bold").setBackground("#e6b8af");
     }
 
-    // Garante headers (Auto-Manage)
+    // Garante headers
     if (sheetKeys.getLastRow() === 0) {
         sheetKeys.appendRow(expected);
     } else if (String(sheetKeys.getRange(1, 1).getValue()) !== "ID_SOLICITACAO") {
@@ -1765,7 +1748,7 @@ function updateBitlockerCustody(payload) {
         sheetKeys.getRange(1, 1, 1, expected.length).setValues([expected]);
     }
 
-    // 2. Registra Chave
+    // 2. Registra Chave na aba de Custódia
     sheetKeys.appendRow([
         String(payload.id).trim(),
         new Date(),
@@ -1775,14 +1758,21 @@ function updateBitlockerCustody(payload) {
         payload.recoveryKeyId
     ]);
 
-    // 3. Atualiza Fila Principal (Apenas Log, Status continua PENDENTE aguardando analista)
+    // 3. Atualiza Fila Principal (Solicitações)
     const sheetFila = ss.getSheetByName("Solicitações");
     const data = sheetFila.getDataRange().getValues();
     const reqId = String(payload.id).trim();
 
     for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]).trim() === reqId) {
-            sheetFila.getRange(i + 1, 13).setValue("Chave localizada e enviada para custódia do analista.");
+            // Col 4 (D): Atualiza para o Hostname Real (estava o ID de 8 dígitos)
+            sheetFila.getRange(i + 1, 4).setValue(payload.hostname);
+
+            // Col 10 (J): Status Processamento
+            sheetFila.getRange(i + 1, 10).setValue("LOCALIZADO");
+
+            // Col 13 (M): Detalhes Adicionais
+            sheetFila.getRange(i + 1, 13).setValue("Chave localizada e enviada para e-mail do analista.");
             break;
         }
     }
@@ -1793,7 +1783,7 @@ function updateBitlockerCustody(payload) {
  * v1.5.0: Finalização Manual pelo Analista (Link no Email)
  */
 function finalizarAtendimentoBitlocker(id, analistaEmail) {
-    const ss = SpreadsheetApp.openById(ID_PLANILHA_GESTAO);
+    const ss = getDatabaseConnection();
     const sheet = ss.getSheetByName("Solicitações");
     const data = sheet.getDataRange().getValues();
     const reqId = String(id).trim(); // Conversão Explícita de Tipo

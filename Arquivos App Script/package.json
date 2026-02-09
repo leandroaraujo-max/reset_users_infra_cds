@@ -1,0 +1,10 @@
+{
+  "name": "reset-users-infra-cds",
+  "version": "1.0.0",
+  "scripts": {
+    "push:staging": "copy .clasp-staging.json .clasp.json && clasp push",
+    "push:prod": "copy .clasp-prod.json .clasp.json && clasp push",
+    "deploy:staging": "clasp deploy --deploymentId AKfycbziGqnkYDXS4oI2nDqPlrk2epJjN8boCVcjSdZ-kgZWqIPgBfprE9vCTIRCDggllC_aKg --description 'Staging Deploy'",
+    "deploy:prod": "npm run push:prod && clasp deploy --deploymentId AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr"
+  }
+}

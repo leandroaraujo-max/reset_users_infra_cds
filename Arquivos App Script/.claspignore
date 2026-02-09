@@ -1,0 +1,12 @@
+**/*.txt
+**/*.exe
+**/*.ps1
+**/*.json
+!appsscript.json
+.clasp.json
+.clasp-staging.json
+.clasp-prod.json
+package.json
+package-lock.json
+node_modules/
+.git/

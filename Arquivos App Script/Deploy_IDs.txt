@@ -1,7 +1,0 @@
-AMBIENTE DE PRODUÇÃO (Estável v1.1.0):
-Deployment ID: AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr
-URL: https://script.google.com/macros/s/AKfycbwcwKziwn37TfZgEJcHA_37l9aG6prf73CL-8JZ9pMgO9igU6mEC9iTrdNI1FbtI4Kr/exec
-
-AMBIENTE DE HOMOLOGAÇÃO (Testes):
-Deployment ID: AKfycbzCoQtXujp00oKj_JKy556ma23EmlL9cRaVIfc45Avi7SSrV1p56flSecxbuhx6ko1JQ
-URL: https://script.google.com/macros/s/AKfycbzCoQtXujp00oKj_JKy556ma23EmlL9cRaVIfc45Avi7SSrV1p56flSecxbuhx6ko1JQ/exec
