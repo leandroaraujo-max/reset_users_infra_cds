@@ -171,11 +171,23 @@ function Get-WmsClusterConfig {
     
     try {
         $response = Invoke-RestMethod -Uri "$ApiUrl`?mode=get_wms_cluster" -Method Get -ErrorAction Stop
+        
+        # Valida se o retorno é um array de strings válidas
         if ($response -and $response.Count -gt 0) {
-            Write-Log "Cluster WMS: $($response.Count) servidores obtidos" "INFO"
-            return $response
+            $validServers = @()
+            foreach ($server in $response) {
+                if ($server -and $server.ToString().Trim().Length -gt 0) {
+                    $validServers += $server.ToString().Trim()
+                }
+            }
+            
+            if ($validServers.Count -gt 0) {
+                Write-Log "Cluster WMS: $($validServers.Count) servidores obtidos" "INFO"
+                return $validServers
+            }
         }
-        Write-Log "Cluster WMS: Lista vazia retornada" "WARN"
+        
+        Write-Log "Cluster WMS: Lista vazia ou inválida retornada" "WARN"
         return @()
     }
     catch {
@@ -285,6 +297,18 @@ function Invoke-TaskExecution {
                 if (-not $userModelo) { throw "Usuário Modelo não informado." }
 
                 Write-Log "Buscando grupos para modelo: $userModelo" "INFO" $LogPfx
+                
+                # Se for matrícula (apenas números), busca o username
+                if ($userModelo -match '^\d+$') {
+                    Write-Log "Matrícula detectada ($userModelo), buscando username..." "INFO" $LogPfx
+                    $adUser = Get-ADUser -Filter "EmployeeID -eq '$userModelo'" -Properties SamAccountName -ErrorAction Stop
+                    if (-not $adUser) {
+                        throw "Usuário com matrícula $userModelo não encontrado no AD"
+                    }
+                    $userModelo = $adUser.SamAccountName
+                    Write-Log "Username encontrado: $userModelo" "INFO" $LogPfx
+                }
+                
                 $groups = (Get-ADPrincipalGroupMembership -Identity $userModelo -ErrorAction Stop | Select-Object -ExpandProperty Name) -join ";"
                 
                 $payload.status = "CONCLUIDO"
