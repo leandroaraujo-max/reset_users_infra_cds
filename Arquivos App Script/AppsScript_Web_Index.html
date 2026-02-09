@@ -1447,6 +1447,42 @@
 
                 const fetchMirrorGroups = () => {
                     if (!mirrorForm.value.modelUser) return;
+
+                    const inputValue = mirrorForm.value.modelUser.trim();
+
+                    // Detecta se é matrícula (apenas números)
+                    if (/^\d+$/.test(inputValue)) {
+                        mirrorLoading.value = true;
+                        mirrorStatusMsg.value = 'Convertendo matrícula em username...';
+
+                        // Busca o username no BigQuery usando a matrícula
+                        google.script.run.withSuccessHandler(res => {
+                            if (res.success && res.data && res.data.length > 0) {
+                                const user = res.data[0];
+                                mirrorForm.value.modelUser = user.user_name;
+                                mirrorStatusMsg.value = `Username encontrado: ${user.user_name}`;
+
+                                // Aguarda 1 segundo para o usuário ver a conversão
+                                setTimeout(() => {
+                                    proceedWithMirrorRequest();
+                                }, 1000);
+                            } else {
+                                mirrorLoading.value = false;
+                                mirrorStatusMsg.value = '';
+                                alert('Matrícula não encontrada no sistema. Verifique o ID e tente novamente.');
+                            }
+                        }).withFailureHandler(e => {
+                            mirrorLoading.value = false;
+                            mirrorStatusMsg.value = '';
+                            alert('Erro ao buscar matrícula: ' + e.message);
+                        }).searchUserBQ(inputValue);
+                    } else {
+                        // Se não for matrícula, procede normalmente
+                        proceedWithMirrorRequest();
+                    }
+                };
+
+                const proceedWithMirrorRequest = () => {
                     mirrorLoading.value = true;
                     mirrorGroups.value = [];
                     mirrorStatusMsg.value = 'Iniciando solicitação ao agente...';
