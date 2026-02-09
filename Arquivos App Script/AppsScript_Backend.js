@@ -524,7 +524,7 @@ function submitBitlockerRequest(payload) {
         nextId,                              // ID (A)
         timestamp,                           // DATA (B)
         u.filial || "BITLOCKER",             // FILIAL (C)
-        payload.hostname,                    // USER_NAME/HOSTNAME (D)
+        u.user_name || payload.hostname,     // USER_NAME (D) - Prioriza username, fallback para hostname
         u.nome || "Estação AD",              // NOME (E)
         u.email || "-",                      // EMAIL_COLAB (F)
         u.centro_custo || "-",               // CENTRO_CUSTO (G)
